@@ -59,11 +59,20 @@ impl Interface {
         let backend = TermionBackend::new(stdout);
         let mut terminal = TuiTerminal::new(backend)?;
 
+        let file_list = self.root.flatten();
+        let rendered_file_list: Vec<ListItem> = file_list
+            .iter()
+            .map(|tn| ListItem::new(Span::from(String::from(tn))))
+            .collect();
+
         loop {
             terminal.draw(|f| {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints(vec![]);
+                    .constraints(vec![Constraint::Percentage(34), Constraint::Percentage(66)])
+                    .split(f.size());
+
+                f.render_widget(List::new(Vec::from(&rendered_file_list[0..])), chunks[0]);
             })?;
 
             match self.evt_rx.recv()? {

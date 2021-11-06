@@ -1,3 +1,5 @@
+#![feature(in_band_lifetimes)]
+
 use std::fs;
 
 mod backends;
@@ -8,9 +10,9 @@ use crate::prelude::*;
 
 fn main() {
     let mut backend = backends::load();
-    if let Err(e) = play_first(&mut backend) {
-        println!("{:?}", e);
-    };
+    // if let Err(e) = play_first(&mut backend) {
+    // println!("{:?}", e);
+    // };
 
     let mut interface = interface::Interface::new();
     interface.render_loop();
