@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use anyhow::Result;
 use std::{
     fmt, fs,
@@ -44,31 +45,37 @@ impl<'a> From<&BorrowedTreeNode<'a>> for String {
 
 pub struct Folder {
     depth: usize,
-    expanded: bool,
     path: PathBuf,
+    display: String,
     children: Vec<TreeNode>,
 }
 pub struct File {
     depth: usize,
-    path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl Folder {
-    pub fn flatten(&'a self) -> Vec<BorrowedTreeNode> {
-        fn flatten(folder: &'a Folder, result: &mut Vec<BorrowedTreeNode<'a>>) {
+    pub fn flatten(&'a self, expanded: &HashSet<String>) -> Vec<BorrowedTreeNode> {
+        fn flatten(
+            folder: &'a Folder,
+            expanded: &HashSet<String>,
+            result: &mut Vec<BorrowedTreeNode<'a>>,
+        ) {
             result.push(BorrowedTreeNode::Folder(folder));
 
             for child in &folder.children {
                 match &child {
                     TreeNode::File(f) => result.push(BorrowedTreeNode::File(f)),
-                    TreeNode::Folder(f) if f.expanded => flatten(f, result),
+                    TreeNode::Folder(f) if expanded.contains(&f.display) => {
+                        flatten(f, expanded, result)
+                    }
                     TreeNode::Folder(f) => result.push(BorrowedTreeNode::Folder(f)),
                 }
             }
         }
 
         let mut result = vec![];
-        flatten(self, &mut result);
+        flatten(self, expanded, &mut result);
         result
     }
 }
@@ -90,7 +97,7 @@ impl AquinasPathBuf for PathBuf {
                     false => result.push(TreeNode::Folder(Folder {
                         depth,
                         children: collect(&path, depth + 1)?,
-                        expanded: false,
+                        display: format!("{}", path.display()),
                         path: path,
                     })),
                 }
@@ -99,9 +106,9 @@ impl AquinasPathBuf for PathBuf {
         }
 
         Folder {
-            expanded: true,
             depth: 0,
             path: self.clone(),
+            display: format!("{}", self.display()),
             children: collect(self, 0).expect("Could not build file tree."),
         }
     }

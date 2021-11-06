@@ -15,7 +15,7 @@ fn main() {
     // };
 
     let mut interface = interface::Interface::new();
-    interface.render_loop();
+    interface.render_loop(&mut backend);
 }
 
 fn play_first(backend: &mut Box<dyn Backend>) -> Result<()> {
