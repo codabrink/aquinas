@@ -1,14 +1,8 @@
+use crate::prelude::*;
 use anyhow::Result;
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{unbounded, Receiver};
 use std::{collections::VecDeque, io, path::PathBuf, thread, time::Duration};
-use termion::{
-    event::Key,
-    input::{MouseTerminal, TermRead},
-    raw::IntoRawMode,
-    screen::AlternateScreen,
-};
-use tui::style::Modifier;
-use tui::widgets::Gauge;
+use termion::{event::Key, input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
@@ -25,7 +19,7 @@ enum Event {
 
 pub struct Interface {
     evt_rx: Receiver<Event>,
-    path: PathBuf,
+    root: Folder,
 }
 
 impl Interface {
@@ -51,9 +45,11 @@ impl Interface {
             thread::sleep(Duration::from_millis(200));
         });
 
+        let path = std::env::current_dir().expect("Could not get current dir.");
+
         Self {
             evt_rx,
-            path: PathBuf::new(),
+            root: path.to_folder(),
         }
     }
 
