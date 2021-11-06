@@ -108,7 +108,7 @@ impl Interface {
                                         self.list_offset = (self.list_offset + 1)
                                             .min(rendered_file_list.len().saturating_sub(height));
                                     }
-                                    (i + 1).min(height)
+                                    (i + 1).min(height).min(rendered_file_list.len() - 1)
                                 }
                                 None => 0,
                             };
