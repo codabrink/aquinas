@@ -4,6 +4,7 @@ use std::{
     fmt, fs,
     path::{Path, PathBuf},
 };
+use tui::{text::Span, widgets::ListItem};
 
 pub enum TreeNode {
     Folder(Folder),
@@ -14,39 +15,38 @@ pub enum BorrowedTreeNode<'a> {
     File(&'a File),
 }
 
-impl<'a> fmt::Display for BorrowedTreeNode<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl<'a> BorrowedTreeNode<'a> {
+    fn file(&self) -> String {
         match self {
-            BorrowedTreeNode::Folder(folder) => {
-                write!(
-                    f,
-                    "{}{}",
-                    " ".repeat(folder.depth),
-                    folder.path.file_name().unwrap().to_string_lossy()
-                )
+            BorrowedTreeNode::Folder(f) => f.path.file_name(),
+            BorrowedTreeNode::File(f) => f.path.file_name(),
+        }
+        .unwrap()
+        .to_string_lossy()
+        .to_string()
+    }
+
+    pub fn to_string(&self, expanded: &HashSet<String>) -> String {
+        match self {
+            BorrowedTreeNode::File(f) => {
+                format!("{}{}", " ".repeat(f.depth * 2), self.file())
             }
-            BorrowedTreeNode::File(file) => {
-                write!(
-                    f,
-                    "{}{}",
-                    " ".repeat(file.depth),
-                    file.path.file_name().unwrap().to_string_lossy()
-                )
+            BorrowedTreeNode::Folder(f) => {
+                let symbol = if expanded.contains(&f.display) {
+                    '▼'
+                } else {
+                    '▶'
+                };
+                format!("{}{} {}", " ".repeat(f.depth * 2), symbol, self.file())
             }
         }
-    }
-}
-
-impl<'a> From<&BorrowedTreeNode<'a>> for String {
-    fn from(tn: &BorrowedTreeNode<'a>) -> Self {
-        format!("{}", tn)
     }
 }
 
 pub struct Folder {
     depth: usize,
     path: PathBuf,
-    display: String,
+    pub display: String,
     children: Vec<TreeNode>,
 }
 pub struct File {

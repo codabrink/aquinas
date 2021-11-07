@@ -30,6 +30,7 @@ use std::path::Path;
 
 pub struct GStreamer {
     player: gst_player::Player,
+    paused: bool,
 }
 
 impl super::Backend for GStreamer {
@@ -41,7 +42,10 @@ impl super::Backend for GStreamer {
             Some(&dispatcher.upcast::<gst_player::PlayerSignalDispatcher>()),
         );
 
-        Self { player }
+        Self {
+            player,
+            paused: true,
+        }
     }
 
     fn duration(path: &Path) -> u64 {
@@ -59,6 +63,18 @@ impl super::Backend for GStreamer {
     fn play(&mut self, path: &Path) {
         self.player.set_uri(&format!("file:///{}", path.display()));
         self.player.play();
+        self.paused = false;
+    }
+    fn pause(&mut self) {
+        self.player.pause();
+        self.paused = true;
+    }
+    fn toggle(&mut self) {
+        match self.paused {
+            true => self.player.play(),
+            false => self.player.pause(),
+        }
+        self.paused = !self.paused;
     }
 
     fn progress(&mut self) -> (f64, u64, u64) {

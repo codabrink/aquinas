@@ -17,5 +17,7 @@ pub trait Backend {
     where
         Self: Sized;
     fn play(&mut self, path: &Path);
+    fn pause(&mut self);
+    fn toggle(&mut self);
     fn progress(&mut self) -> (f64, u64, u64);
 }
