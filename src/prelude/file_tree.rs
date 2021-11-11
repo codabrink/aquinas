@@ -1,22 +1,42 @@
 use crate::prelude::*;
 use anyhow::Result;
 use std::{
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
 };
-use tui::{text::Span, widgets::ListItem};
 
+#[derive(PartialEq)]
 pub enum TreeNode {
     Folder(Folder),
     File(File),
 }
+
+#[derive(PartialEq)]
 pub enum BorrowedTreeNode<'a> {
     Folder(&'a Folder),
     File(&'a File),
 }
 
+impl<'a> PartialOrd for BorrowedTreeNode<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.path_string().partial_cmp(other.path_string())
+    }
+    fn lt(&self, other: &Self) -> bool {
+        self.path_string() < other.path_string()
+    }
+    fn le(&self, other: &Self) -> bool {
+        self.path_string() <= other.path_string()
+    }
+    fn gt(&self, other: &Self) -> bool {
+        self.path_string() > other.path_string()
+    }
+    fn ge(&self, other: &Self) -> bool {
+        self.path_string() >= other.path_string()
+    }
+}
+
 impl<'a> BorrowedTreeNode<'a> {
-    fn file(&self) -> String {
+    pub fn file(&self) -> String {
         match self {
             BorrowedTreeNode::Folder(f) => f.path.file_name(),
             BorrowedTreeNode::File(f) => f.path.file_name(),
@@ -25,33 +45,26 @@ impl<'a> BorrowedTreeNode<'a> {
         .to_string_lossy()
         .to_string()
     }
-
-    pub fn to_string(&self, expanded: &HashSet<String>) -> String {
+    fn path_string(&self) -> &String {
         match self {
-            BorrowedTreeNode::File(f) => {
-                format!("{}{}", " ".repeat(f.depth * 2), self.file())
-            }
-            BorrowedTreeNode::Folder(f) => {
-                let symbol = if expanded.contains(&f.display) {
-                    '▼'
-                } else {
-                    '▶'
-                };
-                format!("{}{} {}", " ".repeat(f.depth * 2), symbol, self.file())
-            }
+            BorrowedTreeNode::Folder(f) => &f.path_string,
+            BorrowedTreeNode::File(f) => &f.path_string,
         }
     }
 }
 
+#[derive(PartialEq)]
 pub struct Folder {
-    depth: usize,
+    pub depth: usize,
     path: PathBuf,
-    pub display: String,
+    pub path_string: String,
     children: Vec<TreeNode>,
 }
+#[derive(PartialEq)]
 pub struct File {
-    depth: usize,
+    pub depth: usize,
     pub path: PathBuf,
+    pub path_string: String,
 }
 
 impl Folder {
@@ -66,7 +79,7 @@ impl Folder {
             for child in &folder.children {
                 match &child {
                     TreeNode::File(f) => result.push(BorrowedTreeNode::File(f)),
-                    TreeNode::Folder(f) if expanded.contains(&f.display) => {
+                    TreeNode::Folder(f) if expanded.contains(&f.path_string) => {
                         flatten(f, expanded, result)
                     }
                     TreeNode::Folder(f) => result.push(BorrowedTreeNode::Folder(f)),
@@ -93,11 +106,15 @@ impl AquinasPathBuf for PathBuf {
                 let path = entry.path();
 
                 match path.is_file() {
-                    true => result.push(TreeNode::File(File { path, depth })),
+                    true => result.push(TreeNode::File(File {
+                        depth,
+                        path_string: path.display().to_string(),
+                        path,
+                    })),
                     false => result.push(TreeNode::Folder(Folder {
                         depth,
                         children: collect(&path, depth + 1)?,
-                        display: format!("{}", path.display()),
+                        path_string: path.display().to_string(),
                         path: path,
                     })),
                 }
@@ -108,7 +125,7 @@ impl AquinasPathBuf for PathBuf {
         Folder {
             depth: 0,
             path: self.clone(),
-            display: format!("{}", self.display()),
+            path_string: self.display().to_string(),
             children: collect(self, 0).expect("Could not build file tree."),
         }
     }

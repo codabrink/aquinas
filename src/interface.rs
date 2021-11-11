@@ -1,3 +1,5 @@
+mod file_list;
+
 use crate::prelude::*;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
@@ -8,7 +10,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState},
     Terminal as TuiTerminal,
 };
 
@@ -19,9 +21,9 @@ enum Event {
 
 pub struct Interface {
     evt_rx: Receiver<Event>,
-    root: Folder,
-    expanded: HashSet<String>,
-    list_offset: usize,
+    pub root: Folder,
+    pub expanded: HashSet<String>,
+    pub list_offset: usize,
 }
 
 impl Interface {
@@ -82,24 +84,12 @@ impl Interface {
 
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints(vec![Constraint::Percentage(34), Constraint::Percentage(66)])
+                    .constraints(vec![Constraint::Length(80), Constraint::Min(1)])
                     .split(f.size());
 
-                let list_items: Vec<ListItem> = file_list
-                    [self.list_offset..=(self.list_offset + height as usize).min(file_list.len())]
-                    .iter()
-                    .map(|tn| ListItem::new(Span::from(tn.to_string(&self.expanded))))
-                    .collect();
+                let list = file_list::render_file_list(&self, &file_list, height as usize);
 
-                f.render_stateful_widget(
-                    List::new(Vec::from(list_items)).highlight_style(
-                        Style::default()
-                            .bg(Color::LightGreen)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                    chunks[0],
-                    &mut list_state,
-                );
+                f.render_stateful_widget(list, chunks[0], &mut list_state);
             })?;
 
             match self.evt_rx.recv()? {
@@ -135,7 +125,7 @@ impl Interface {
                             let i = i + self.list_offset;
                             if let Some(tn) = file_list.get(i) {
                                 if let BorrowedTreeNode::Folder(f) = tn {
-                                    self.expanded.insert(f.display.clone());
+                                    self.expanded.insert(f.path_string.clone());
                                 }
                             }
                         }
@@ -145,7 +135,7 @@ impl Interface {
                             let i = i + self.list_offset;
                             if let Some(tn) = file_list.get(i) {
                                 if let BorrowedTreeNode::Folder(f) = tn {
-                                    self.expanded.remove(&f.display);
+                                    self.expanded.remove(&f.path_string);
                                 }
                             }
                         }
