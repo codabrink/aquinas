@@ -1,17 +1,15 @@
 mod cmd_input;
 mod file_list;
 
-use crate::prelude::*;
+use crate::{backends, prelude::*};
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
-use std::{collections::VecDeque, io, ops::Add, path::PathBuf, rc::Rc, thread, time::Duration};
+use std::{io, path::PathBuf, rc::Rc, thread, time::Duration};
 use termion::{event::Key, input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    text::{Span, Spans},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::ListState,
     Terminal as TuiTerminal,
 };
 
@@ -19,13 +17,20 @@ enum Event {
     Input(Key),
     Tick,
 }
+pub enum Focusable {
+    FileList,
+    Dir,
+}
 
 pub struct Interface {
     evt_rx: Receiver<Event>,
-    pub root: Rc<TreeNode>,
+    pub audio_backend: Box<dyn Backend>,
+    pub root: Option<Rc<TreeNode>>,
+    pub file_list: Vec<ListElement>,
     pub expanded: HashSet<String>,
     pub list_offset: usize,
-    pub cmd: String,
+    pub input: String,
+    pub focus: Focusable,
 }
 
 impl Interface {
@@ -52,130 +57,88 @@ impl Interface {
         });
 
         let path = std::env::current_dir().expect("Could not get current dir.");
-        let root = Rc::new(TreeNode::Folder(path.to_folder()));
-        let mut expanded = HashSet::new();
-        expanded.insert(root.key().clone());
 
-        Self {
+        let mut interface = Self {
+            audio_backend: backends::load(),
             evt_rx,
-            root,
-            expanded,
+            root: None,
+            file_list: vec![],
+            expanded: HashSet::new(),
             list_offset: 0,
-            cmd: String::new(),
-        }
+            focus: Focusable::FileList,
+            input: String::new(),
+        };
+        interface.set_root(path);
+
+        interface
     }
 
-    pub fn render_loop(&mut self, audio_backend: &mut Box<dyn Backend>) -> Result<()> {
+    pub fn set_root(&mut self, path: PathBuf) {
+        let root = Rc::new(TreeNode::Folder(path.to_folder()));
+        self.expanded.insert(root.key().clone());
+        self.root = Some(root);
+        self.rebuild_file_list();
+    }
+
+    pub fn rebuild_file_list(&mut self) {
+        self.file_list = match &self.root {
+            Some(root) => root.flatten(&self.expanded),
+            _ => vec![],
+        };
+    }
+
+    pub fn render_loop(&mut self) -> Result<()> {
         let stdout = io::stdout().into_raw_mode()?;
         let stdout = AlternateScreen::from(stdout);
         let backend = TermionBackend::new(stdout);
         let mut terminal = TuiTerminal::new(backend)?;
 
-        let mut file_list = self.root.flatten(&self.expanded);
         let mut list_state = ListState::default();
         let mut height = 0;
-        let mut rebuild = false;
-        let mut show_cmd = false;
 
         loop {
-            if rebuild {
-                file_list = self.root.flatten(&self.expanded);
-                rebuild = false;
-            }
-
             terminal.draw(|f| {
                 height = f.size().height;
 
+                let v_constraints = match self.focus {
+                    Focusable::Dir => vec![Constraint::Length(3), Constraint::Min(1)],
+                    _ => vec![Constraint::Min(1)],
+                };
+
                 let v_chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints(vec![Constraint::Length(3), Constraint::Min(1)])
+                    .constraints(v_constraints)
                     .split(f.size());
 
-                f.render_widget(cmd_input::render(self), v_chunks[0]);
+                match self.focus {
+                    Focusable::Dir => {
+                        f.render_widget(cmd_input::render(self), v_chunks[0]);
+                    }
+                    _ => {}
+                }
 
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(vec![Constraint::Length(80), Constraint::Min(1)])
-                    .split(v_chunks[1]);
+                    .split(v_chunks[v_chunks.len() - 1]);
 
-                let list = file_list::render_file_list(&self, &file_list, height as usize);
+                let list = file_list::render_file_list(&self, &self.file_list, height as usize);
 
                 f.render_stateful_widget(list, chunks[0], &mut list_state);
             })?;
 
             match self.evt_rx.recv()? {
                 Event::Input(key) => match key {
-                    Key::Down | Key::Ctrl('n') => {
-                        let i = match list_state.selected() {
-                            Some(i) => {
-                                let height = height as usize;
-                                if i == height {
-                                    self.list_offset = (self.list_offset + 1)
-                                        .min(file_list.len().saturating_sub(height));
-                                }
-                                (i + 1).min(height).min(file_list.len() - 1)
-                            }
-                            None => 0,
-                        };
-                        list_state.select(Some(i));
-                    }
-                    Key::Up | Key::Ctrl('p') => {
-                        let i = match list_state.selected() {
-                            Some(i) => {
-                                if i == 0 {
-                                    self.list_offset = self.list_offset.saturating_sub(1)
-                                }
-                                i.saturating_sub(1)
-                            }
-                            None => 0,
-                        };
-                        list_state.select(Some(i));
-                    }
-                    Key::Right | Key::Ctrl('f') => {
-                        if let Some(i) = list_state.selected() {
-                            let i = i + self.list_offset;
-                            if let Some(el) = file_list.get(i) {
-                                if let Some(tn) = el.tn.upgrade() {
-                                    if let TreeNode::Folder(f) = &*tn {
-                                        self.expanded.insert(f.key.clone());
-                                        rebuild = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Key::Left | Key::Ctrl('b') => {
-                        if let Some(i) = list_state.selected() {
-                            let i = i + self.list_offset;
-                            if let Some(el) = file_list.get(i) {
-                                if let Some(tn) = el.tn.upgrade() {
-                                    if let TreeNode::Folder(f) = &*tn {
-                                        self.expanded.remove(&f.key);
-                                        rebuild = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Key::Char('\n') => {
-                        if let Some(i) = list_state.selected() {
-                            let i = i + self.list_offset;
-                            if let Some(el) = file_list.get(i) {
-                                if let Some(tn) = el.tn.upgrade() {
-                                    if let TreeNode::File(f) = &*tn {
-                                        audio_backend.play(&f.path);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Key::Char(' ') => audio_backend.toggle(),
-                    Key::Char('c') => show_cmd = !show_cmd,
                     Key::Char('q') => {
                         drop(terminal);
                         std::process::exit(0);
                     }
-                    _ => {}
+                    _ => match self.focus {
+                        Focusable::FileList => {
+                            file_list::handle_input(self, &mut list_state, key, height as usize)
+                        }
+                        Focusable::Dir => cmd_input::handle_input(self, key),
+                    },
                 },
 
                 _ => {}

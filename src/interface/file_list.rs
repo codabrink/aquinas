@@ -1,11 +1,12 @@
 use tui::widgets::List;
 
-use super::Interface;
+use super::{Focusable, Interface};
 use crate::prelude::*;
+use termion::event::Key;
 use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, ListItem},
+    widgets::{Block, Borders, ListItem, ListState},
 };
 
 pub fn render_file_list<'a>(
@@ -20,7 +21,18 @@ pub fn render_file_list<'a>(
         .collect();
 
     List::new(list_items)
-        .block(Block::default().borders(Borders::ALL).title("File List"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(match state.focus {
+                    Focusable::FileList => Color::Green,
+                    _ => Color::White,
+                }))
+                .title(match &state.root {
+                    Some(root) => root.file(),
+                    _ => String::from("No Folder"),
+                }),
+        )
         .highlight_style(
             Style::default()
                 .bg(Color::LightGreen)
@@ -48,4 +60,76 @@ fn render_list_item<'a>(state: &'a Interface, el: &'a ListElement) -> ListItem<'
             Span::from(el.title.as_ref()),
         ]),
     })
+}
+
+pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key, height: usize) {
+    match key {
+        Key::Down | Key::Ctrl('n') => {
+            let i = match list_state.selected() {
+                Some(i) => {
+                    let height = height as usize;
+                    if i == height {
+                        state.list_offset = (state.list_offset + 1)
+                            .min(state.file_list.len().saturating_sub(height));
+                    }
+                    (i + 1).min(height).min(state.file_list.len() - 1)
+                }
+                None => 0,
+            };
+            list_state.select(Some(i));
+        }
+        Key::Up | Key::Ctrl('p') => {
+            let i = match list_state.selected() {
+                Some(i) => {
+                    if i == 0 {
+                        state.list_offset = state.list_offset.saturating_sub(1)
+                    }
+                    i.saturating_sub(1)
+                }
+                None => 0,
+            };
+            list_state.select(Some(i));
+        }
+        Key::Right | Key::Ctrl('f') => {
+            if let Some(i) = list_state.selected() {
+                let i = i + state.list_offset;
+                if let Some(el) = state.file_list.get(i) {
+                    if let Some(tn) = el.tn.upgrade() {
+                        if let TreeNode::Folder(f) = &*tn {
+                            state.expanded.insert(f.key.clone());
+                            state.rebuild_file_list();
+                        }
+                    }
+                }
+            }
+        }
+        Key::Left | Key::Ctrl('b') => {
+            if let Some(i) = list_state.selected() {
+                let i = i + state.list_offset;
+                if let Some(el) = state.file_list.get(i) {
+                    if let Some(tn) = el.tn.upgrade() {
+                        if let TreeNode::Folder(f) = &*tn {
+                            state.expanded.remove(&f.key);
+                            state.rebuild_file_list();
+                        }
+                    }
+                }
+            }
+        }
+        Key::Char('\n') => {
+            if let Some(i) = list_state.selected() {
+                let i = i + state.list_offset;
+                if let Some(el) = state.file_list.get(i) {
+                    if let Some(tn) = el.tn.upgrade() {
+                        if let TreeNode::File(f) = &*tn {
+                            state.audio_backend.play(&f.path);
+                        }
+                    }
+                }
+            }
+        }
+        Key::Char(' ') => state.audio_backend.toggle(),
+        Key::Char('d') => state.focus = Focusable::Dir,
+        _ => {}
+    }
 }
