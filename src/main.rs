@@ -1,5 +1,3 @@
-#![feature(in_band_lifetimes)]
-
 mod backends;
 mod interface;
 mod prelude;

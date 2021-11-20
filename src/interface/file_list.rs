@@ -8,9 +8,9 @@ use tui::{
     widgets::{Block, Borders, ListItem},
 };
 
-pub fn render_file_list(
+pub fn render_file_list<'a>(
     state: &'a Interface,
-    file_list: &'a [BorrowedTreeNode],
+    file_list: &'a [ListElement],
     height: usize,
 ) -> List<'a> {
     let list_items: Vec<ListItem> = file_list
@@ -28,24 +28,24 @@ pub fn render_file_list(
         )
 }
 
-fn render_list_item(state: &'a Interface, tn: &'a BorrowedTreeNode) -> ListItem<'a> {
-    ListItem::new(match tn {
-        BorrowedTreeNode::Folder(f) => Spans::from(vec![
-            Span::from(" ".repeat(f.depth * 2)),
-            Span::from(match state.expanded.contains(&f.path_string) {
+fn render_list_item<'a>(state: &'a Interface, el: &'a ListElement) -> ListItem<'a> {
+    ListItem::new(match el.is_folder {
+        true => Spans::from(vec![
+            Span::from(" ".repeat(el.depth * 2)),
+            Span::from(match state.expanded.contains(&el.key) {
                 true => "▼ ",
                 false => "▶ ",
             }),
             Span::styled(
-                tn.file(),
+                &el.title,
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
-        BorrowedTreeNode::File(f) => Spans::from(vec![
-            Span::from(" ".repeat(f.depth * 2)),
-            Span::from(tn.file()),
+        false => Spans::from(vec![
+            Span::from(" ".repeat(el.depth * 2)),
+            Span::from(el.title.as_ref()),
         ]),
     })
 }

@@ -1,9 +1,10 @@
+mod cmd_input;
 mod file_list;
 
 use crate::prelude::*;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
-use std::{collections::VecDeque, io, ops::Add, path::PathBuf, thread, time::Duration};
+use std::{collections::VecDeque, io, ops::Add, path::PathBuf, rc::Rc, thread, time::Duration};
 use termion::{event::Key, input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
 use tui::{
     backend::TermionBackend,
@@ -21,9 +22,10 @@ enum Event {
 
 pub struct Interface {
     evt_rx: Receiver<Event>,
-    pub root: Folder,
+    pub root: Rc<TreeNode>,
     pub expanded: HashSet<String>,
     pub list_offset: usize,
+    pub cmd: String,
 }
 
 impl Interface {
@@ -50,19 +52,20 @@ impl Interface {
         });
 
         let path = std::env::current_dir().expect("Could not get current dir.");
-        // let root = path.to_folder();
-        let expanded = HashSet::new();
-        // let file_list = root.flatten(&expanded);
+        let root = Rc::new(TreeNode::Folder(path.to_folder()));
+        let mut expanded = HashSet::new();
+        expanded.insert(root.key().clone());
 
         Self {
             evt_rx,
-            root: path.to_folder(),
+            root,
             expanded,
             list_offset: 0,
+            cmd: String::new(),
         }
     }
 
-    pub fn render_loop(&'a mut self, audio_backend: &mut Box<dyn Backend>) -> Result<()> {
+    pub fn render_loop(&mut self, audio_backend: &mut Box<dyn Backend>) -> Result<()> {
         let stdout = io::stdout().into_raw_mode()?;
         let stdout = AlternateScreen::from(stdout);
         let backend = TermionBackend::new(stdout);
@@ -71,21 +74,29 @@ impl Interface {
         let mut file_list = self.root.flatten(&self.expanded);
         let mut list_state = ListState::default();
         let mut height = 0;
-        let mut expanded_len = 0;
+        let mut rebuild = false;
+        let mut show_cmd = false;
 
         loop {
-            if expanded_len != self.expanded.len() {
-                expanded_len = self.expanded.len();
+            if rebuild {
                 file_list = self.root.flatten(&self.expanded);
+                rebuild = false;
             }
 
             terminal.draw(|f| {
                 height = f.size().height;
 
+                let v_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![Constraint::Length(3), Constraint::Min(1)])
+                    .split(f.size());
+
+                f.render_widget(cmd_input::render(self), v_chunks[0]);
+
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints(vec![Constraint::Length(80), Constraint::Min(1)])
-                    .split(f.size());
+                    .split(v_chunks[1]);
 
                 let list = file_list::render_file_list(&self, &file_list, height as usize);
 
@@ -123,9 +134,12 @@ impl Interface {
                     Key::Right | Key::Ctrl('f') => {
                         if let Some(i) = list_state.selected() {
                             let i = i + self.list_offset;
-                            if let Some(tn) = file_list.get(i) {
-                                if let BorrowedTreeNode::Folder(f) = tn {
-                                    self.expanded.insert(f.path_string.clone());
+                            if let Some(el) = file_list.get(i) {
+                                if let Some(tn) = el.tn.upgrade() {
+                                    if let TreeNode::Folder(f) = &*tn {
+                                        self.expanded.insert(f.key.clone());
+                                        rebuild = true;
+                                    }
                                 }
                             }
                         }
@@ -133,9 +147,12 @@ impl Interface {
                     Key::Left | Key::Ctrl('b') => {
                         if let Some(i) = list_state.selected() {
                             let i = i + self.list_offset;
-                            if let Some(tn) = file_list.get(i) {
-                                if let BorrowedTreeNode::Folder(f) = tn {
-                                    self.expanded.remove(&f.path_string);
+                            if let Some(el) = file_list.get(i) {
+                                if let Some(tn) = el.tn.upgrade() {
+                                    if let TreeNode::Folder(f) = &*tn {
+                                        self.expanded.remove(&f.key);
+                                        rebuild = true;
+                                    }
                                 }
                             }
                         }
@@ -143,17 +160,17 @@ impl Interface {
                     Key::Char('\n') => {
                         if let Some(i) = list_state.selected() {
                             let i = i + self.list_offset;
-                            if let Some(tn) = file_list.get(i) {
-                                match tn {
-                                    BorrowedTreeNode::File(f) => {
+                            if let Some(el) = file_list.get(i) {
+                                if let Some(tn) = el.tn.upgrade() {
+                                    if let TreeNode::File(f) = &*tn {
                                         audio_backend.play(&f.path);
                                     }
-                                    _ => {}
                                 }
                             }
                         }
                     }
                     Key::Char(' ') => audio_backend.toggle(),
+                    Key::Char('c') => show_cmd = !show_cmd,
                     Key::Char('q') => {
                         drop(terminal);
                         std::process::exit(0);
