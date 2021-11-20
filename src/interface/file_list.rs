@@ -1,8 +1,7 @@
-use tui::widgets::List;
-
 use super::{Focusable, Interface};
 use crate::prelude::*;
 use termion::event::Key;
+use tui::widgets::List;
 use tui::{
     style::{Color, Modifier, Style},
     text::{Span, Spans},
@@ -20,18 +19,26 @@ pub fn render_file_list<'a>(
         .map(|tn| render_list_item(state, tn))
         .collect();
 
+    let mut title = match &state.root {
+        Some(root) => root.file(),
+        _ => String::from("No Folder"),
+    };
+    title.push_str(&" ".repeat(80 - title.len()));
+
     List::new(list_items)
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                // .borders(Borders::RIGHT)
                 .border_style(Style::default().fg(match state.focus {
                     Focusable::FileList => Color::Green,
                     _ => Color::White,
                 }))
-                .title(match &state.root {
-                    Some(root) => root.file(),
-                    _ => String::from("No Folder"),
-                }),
+                .title(Span::styled(
+                    title,
+                    Style::default()
+                        .bg(Color::Blue)
+                        .add_modifier(Modifier::BOLD),
+                )),
         )
         .highlight_style(
             Style::default()
