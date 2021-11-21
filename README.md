@@ -14,7 +14,7 @@ Built primarily with people who have a local and organized music collection in m
 - **b** - Seek backward 2 seconds (**B** for 5 seconds)
 - **d** - Open change directory prompt
 - **s** - Open search prompt (Search does nothing atm)
-- **left / right** - Expand / contract highlighted folder
+- **Left / Right** - Expand / contract highlighted folder
 
 
 
