@@ -137,7 +137,7 @@ impl Interface {
 
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints(vec![Constraint::Length(80), Constraint::Min(1)])
+                    .constraints(vec![Constraint::Length(50), Constraint::Min(1)])
                     .split(v_chunks[v_chunks.len() - 1]);
 
                 let list = file_list::render_file_list(&self, &self.file_list, height as usize);

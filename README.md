@@ -1,4 +1,4 @@
-⚠️ Under development. Usable, but experience is very rough right now.
+⚠️ Under development. Usable, but experience is very rough right now. I work on this during the weekends. Come back in a month or two. :)
 
 # Aquinas Media Player
 
@@ -6,9 +6,22 @@ A simple and straightforward terminal media player.
 
 Built primarily with people who have a local and organized music collection in mind, with the philosophy that the folder heirarchy is enough.
 
+## Controls
+
+- **Enter** - Play
+- **Space** - Play / Pause
+- **f** - Seek forward 2 seconds (**F** for 5 seconds)
+- **b** - Seek backward 2 seconds (**B** for 5 seconds)
+- **d** - Open change directory prompt
+- **s** - Open search prompt (Search does nothing atm)
+- **left / right** - Expand / contract highlighted folder
+
+
+
 ## Progress
 
 State of the interface.
+
 ![image](https://user-images.githubusercontent.com/779390/142747234-1b4ef088-2903-42b1-b901-3bdd700685d4.png)
 
 ### Features
