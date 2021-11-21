@@ -28,9 +28,9 @@ pub fn render_file_list<'a>(
     List::new(list_items)
         .block(
             Block::default()
-                // .borders(Borders::RIGHT)
+                .borders(Borders::RIGHT)
                 .border_style(Style::default().fg(match state.focus {
-                    Focusable::FileList => Color::Green,
+                    Focusable::FileList => Color::White,
                     _ => Color::White,
                 }))
                 .title(Span::styled(
@@ -123,6 +123,18 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
                 }
             }
         }
+        Key::Char('f') => {
+            state.audio_backend.seek_delta(2);
+        }
+        Key::Char('F') => {
+            state.audio_backend.seek_delta(5);
+        }
+        Key::Char('b') => {
+            state.audio_backend.seek_delta(-2);
+        }
+        Key::Char('B') => {
+            state.audio_backend.seek_delta(-5);
+        }
         Key::Char('\n') => {
             if let Some(i) = list_state.selected() {
                 let i = i + state.list_offset;
@@ -137,6 +149,7 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
         }
         Key::Char(' ') => state.audio_backend.toggle(),
         Key::Char('d') => state.focus = Focusable::Dir,
+        Key::Char('s') => state.focus = Focusable::Search,
         _ => {}
     }
 }

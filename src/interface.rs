@@ -1,17 +1,31 @@
-mod cmd_input;
 mod file_list;
+mod player_state;
+mod user_input;
 
 use crate::{backends, prelude::*};
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
-use std::{io, path::PathBuf, rc::Rc, thread, time::Duration};
-use termion::{event::Key, input::TermRead, raw::IntoRawMode, screen::AlternateScreen};
+use std::{
+    io::{self, Stdout},
+    path::{Path, PathBuf},
+    rc::Rc,
+    thread,
+    time::Duration,
+};
+use termion::{
+    event::Key,
+    input::TermRead,
+    raw::{IntoRawMode, RawTerminal},
+    screen::AlternateScreen,
+};
 use tui::{
     backend::TermionBackend,
     layout::{Constraint, Direction, Layout},
     widgets::ListState,
     Terminal as TuiTerminal,
 };
+
+pub type Frame<'a> = tui::Frame<'a, TermionBackend<AlternateScreen<RawTerminal<Stdout>>>>;
 
 enum Event {
     Input(Key),
@@ -20,6 +34,7 @@ enum Event {
 pub enum Focusable {
     FileList,
     Dir,
+    Search,
 }
 
 pub struct Interface {
@@ -68,12 +83,13 @@ impl Interface {
             focus: Focusable::FileList,
             input: String::new(),
         };
-        interface.set_root(path);
+        interface.set_root(&path);
 
         interface
     }
 
-    pub fn set_root(&mut self, path: PathBuf) {
+    pub fn set_root(&mut self, path: &Path) {
+        let path = PathBuf::from(path);
         let root = Rc::new(TreeNode::Folder(path.to_folder()));
         self.expanded.insert(root.key().clone());
         self.root = Some(root);
@@ -101,7 +117,9 @@ impl Interface {
                 height = f.size().height;
 
                 let v_constraints = match self.focus {
-                    Focusable::Dir => vec![Constraint::Length(3), Constraint::Min(1)],
+                    Focusable::Dir | Focusable::Search => {
+                        vec![Constraint::Length(3), Constraint::Min(1)]
+                    }
                     _ => vec![Constraint::Min(1)],
                 };
 
@@ -111,8 +129,8 @@ impl Interface {
                     .split(f.size());
 
                 match self.focus {
-                    Focusable::Dir => {
-                        f.render_widget(cmd_input::render(self), v_chunks[0]);
+                    Focusable::Dir | Focusable::Search => {
+                        user_input::render(self, &v_chunks[0], f);
                     }
                     _ => {}
                 }
@@ -125,6 +143,7 @@ impl Interface {
                 let list = file_list::render_file_list(&self, &self.file_list, height as usize);
 
                 f.render_stateful_widget(list, chunks[0], &mut list_state);
+                player_state::render(self, &chunks[1], f);
             })?;
 
             match self.evt_rx.recv()? {
@@ -137,10 +156,9 @@ impl Interface {
                         Focusable::FileList => {
                             file_list::handle_input(self, &mut list_state, key, height as usize)
                         }
-                        Focusable::Dir => cmd_input::handle_input(self, key),
+                        Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
                     },
                 },
-
                 _ => {}
             }
         }

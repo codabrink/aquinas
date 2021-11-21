@@ -77,14 +77,27 @@ impl super::Backend for GStreamer {
         self.paused = !self.paused;
     }
 
+    fn seek(&mut self, time: u64) {
+        self.player.seek(ClockTime::from_seconds(time))
+    }
+
+    fn seek_delta(&mut self, delta_time: i64) {
+        let time_pos = match self.player.position() {
+            Some(t) => ClockTime::seconds(t) as i64,
+            None => 0,
+        };
+
+        self.seek((time_pos + delta_time).max(0) as u64)
+    }
+
     fn progress(&mut self) -> (f64, u64, u64) {
         let time_pos = match self.player.position() {
             Some(t) => ClockTime::seconds(t),
-            None => 0_u64,
+            None => 0,
         };
         let duration = match self.player.duration() {
             Some(d) => ClockTime::seconds(d),
-            None => 119_u64,
+            None => 119,
         };
         let percent = time_pos as f64 / (duration as f64);
         (percent, time_pos, duration)

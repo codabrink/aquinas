@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+dirs = "4"
 gstreamer = "0.17"
 gstreamer-player = "0.17"
 gstreamer-pbutils = "0.17"

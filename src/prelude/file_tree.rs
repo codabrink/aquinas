@@ -36,6 +36,7 @@ pub trait RcTreeNode {
     fn to_list_element(&self, depth: usize) -> ListElement;
     fn key(&self) -> &String;
     fn file(&self) -> String;
+    fn path(&self) -> &Path;
     fn flatten(&self, expand: &HashSet<String>) -> Vec<ListElement>;
     fn _flatten(
         &self,
@@ -68,6 +69,13 @@ impl RcTreeNode for Rc<TreeNode> {
         .to_string_lossy()
         .to_string()
     }
+    fn path(&self) -> &Path {
+        match &**self {
+            TreeNode::Folder(f) => &f.path,
+            TreeNode::File(f) => &f.path,
+        }
+    }
+
     fn key(&self) -> &String {
         match &**self {
             TreeNode::Folder(f) => &f.key,
