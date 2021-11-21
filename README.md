@@ -18,7 +18,7 @@ State of the interface.
 - [x] Seek forward / backward
 - [x] Gstreamer backend integration
 - [ ] Alternative backend integrations
-- [ ] Play next song
+- [ ] Automatically play next song
 - [ ] Search
 - [ ] Sorting / ordering
 - [ ] Now playing info
