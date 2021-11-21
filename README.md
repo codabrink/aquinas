@@ -10,14 +10,12 @@ Built primarily with people who have a local and organized music collection in m
 
 - **Enter** - Play
 - **Space** - Play / Pause
+- **Up / Down** - Go up / down file list
+- **Left / Right** - Expand / contract highlighted folder
 - **f** - Seek forward 2 seconds (**F** for 5 seconds)
 - **b** - Seek backward 2 seconds (**B** for 5 seconds)
 - **d** - Open change directory prompt
 - **s** - Open search prompt (Search does nothing atm)
-- **Up / Down** - Go up / down file list.
-- **Left / Right** - Expand / contract highlighted folder
-
-
 
 ## Progress
 
@@ -38,3 +36,5 @@ State of the interface.
 - [ ] Now playing info
 - [ ] Help info
 - [ ] General all around polish
+- [ ] Song metadata
+- [ ] Global media keys
