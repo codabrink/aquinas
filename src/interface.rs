@@ -130,7 +130,7 @@ impl Interface {
 
                 match self.focus {
                     Focusable::Dir | Focusable::Search => {
-                        user_input::render(self, &v_chunks[0], f);
+                        user_input::render(self, v_chunks[0], f);
                     }
                     _ => {}
                 }
@@ -140,9 +140,7 @@ impl Interface {
                     .constraints(vec![Constraint::Length(50), Constraint::Min(1)])
                     .split(v_chunks[v_chunks.len() - 1]);
 
-                let list = file_list::render_file_list(&self, &self.file_list, height as usize);
-
-                f.render_stateful_widget(list, chunks[0], &mut list_state);
+                file_list::render_file_list(self, &mut list_state, chunks[0], f);
                 player_state::render(self, &chunks[1], f);
             })?;
 

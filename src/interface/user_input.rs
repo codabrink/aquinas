@@ -7,7 +7,7 @@ use tui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-pub fn render<'a>(state: &'a mut Interface, area: &Rect, frame: &mut Frame) {
+pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
     let paragraph = Paragraph::new(state.input.as_ref()).block(
         Block::default()
             .borders(Borders::ALL)
@@ -18,7 +18,7 @@ pub fn render<'a>(state: &'a mut Interface, area: &Rect, frame: &mut Frame) {
                 _ => "",
             }),
     );
-    frame.render_widget(paragraph, *area);
+    frame.render_widget(paragraph, area);
 }
 
 pub fn handle_input(state: &mut Interface, key: Key) {

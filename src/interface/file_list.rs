@@ -1,6 +1,7 @@
-use super::{Focusable, Interface};
+use super::*;
 use crate::prelude::*;
 use termion::event::Key;
+use tui::layout::Rect;
 use tui::widgets::List;
 use tui::{
     style::{Color, Modifier, Style},
@@ -10,11 +11,12 @@ use tui::{
 
 pub fn render_file_list<'a>(
     state: &'a Interface,
-    file_list: &'a [ListElement],
-    height: usize,
-) -> List<'a> {
-    let list_items: Vec<ListItem> = file_list
-        [state.list_offset..(state.list_offset + height).min(file_list.len())]
+    list_state: &mut ListState,
+    area: Rect,
+    frame: &mut Frame,
+) {
+    let list_items: Vec<ListItem> = state.file_list
+        [state.list_offset..(state.list_offset + area.height as usize).min(state.file_list.len())]
         .iter()
         .map(|tn| render_list_item(state, tn))
         .collect();
@@ -25,7 +27,7 @@ pub fn render_file_list<'a>(
     };
     title.push_str(&" ".repeat(80 - title.len()));
 
-    List::new(list_items)
+    let list = List::new(list_items)
         .block(
             Block::default()
                 .borders(Borders::RIGHT)
@@ -44,7 +46,8 @@ pub fn render_file_list<'a>(
             Style::default()
                 .bg(Color::LightGreen)
                 .add_modifier(Modifier::BOLD),
-        )
+        );
+    frame.render_stateful_widget(list, area, list_state);
 }
 
 fn render_list_item<'a>(state: &'a Interface, el: &'a ListElement) -> ListItem<'a> {
