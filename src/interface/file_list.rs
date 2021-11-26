@@ -121,14 +121,7 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
             state.audio_backend.seek_delta(-5);
         }
         Key::Char('\n') => {
-            if let Some(i) = list_state.selected() {
-                let i = i + state.list_offset;
-                if let Some(tn) = state.file_list.get(i) {
-                    if tn.children.is_none() {
-                        state.audio_backend.play(&tn.path);
-                    }
-                }
-            }
+            state.play(state.list_index);
         }
         Key::Char(' ') => state.audio_backend.toggle(),
         Key::Char('d') => state.focus = Focusable::Dir,

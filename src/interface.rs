@@ -195,6 +195,21 @@ impl Interface {
                     self.play(index + 1);
                     return;
                 }
+
+                match tn.path.extension() {
+                    Some(ext) => match ext.to_str().unwrap().to_lowercase().as_str() {
+                        "mp3" | "ogg" | "flac" | "wav" => {}
+                        _ => {
+                            self.play(index + 1);
+                            return;
+                        }
+                    },
+                    _ => {
+                        self.play(index + 1);
+                        return;
+                    }
+                }
+
                 self.play_index = index;
                 self.audio_backend.play(&tn.path);
             }
