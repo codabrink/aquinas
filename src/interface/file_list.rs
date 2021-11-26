@@ -75,30 +75,16 @@ fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> 
 pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key, height: usize) {
     match key {
         Key::Down | Key::Ctrl('n') => {
-            let i = match list_state.selected() {
-                Some(i) => {
-                    let height = height as usize;
-                    if i == height {
-                        state.list_offset = (state.list_offset + 1)
-                            .min(state.file_list.len().saturating_sub(height));
-                    }
-                    (i + 1).min(height).min(state.file_list.len() - 1)
-                }
-                None => 0,
-            };
-            list_state.select(Some(i));
+            state.list_index = (state.list_index + 1).min(state.file_list.len().saturating_sub(1));
+            state.list_offset = state
+                .list_offset
+                .max(state.list_index.saturating_sub(height.saturating_sub(1)));
+            list_state.select(Some(state.list_index.saturating_sub(state.list_offset)));
         }
         Key::Up | Key::Ctrl('p') => {
-            let i = match list_state.selected() {
-                Some(i) => {
-                    if i == 0 {
-                        state.list_offset = state.list_offset.saturating_sub(1)
-                    }
-                    i.saturating_sub(1)
-                }
-                None => 0,
-            };
-            list_state.select(Some(i));
+            state.list_index = state.list_index.saturating_sub(1);
+            state.list_offset = state.list_offset.min(state.list_index);
+            list_state.select(Some(state.list_index.saturating_sub(state.list_offset)));
         }
         Key::Right | Key::Ctrl('f') => {
             if let Some(i) = list_state.selected() {
