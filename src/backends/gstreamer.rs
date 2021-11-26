@@ -3,7 +3,7 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_pbutils as gst_pbutils;
 use gstreamer_player as gst_player;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 /**
  * MIT License
  *
@@ -31,6 +31,7 @@ use std::path::Path;
 pub struct GStreamer {
     player: gst_player::Player,
     paused: bool,
+    pub last_played: Option<PathBuf>,
 }
 
 impl super::Backend for GStreamer {
@@ -45,7 +46,11 @@ impl super::Backend for GStreamer {
         Self {
             player,
             paused: true,
+            last_played: None,
         }
+    }
+    fn last_played(&self) -> &Option<PathBuf> {
+        &self.last_played
     }
 
     fn duration(path: &Path) -> u64 {
@@ -63,12 +68,17 @@ impl super::Backend for GStreamer {
     fn play(&mut self, path: &Path) {
         self.player.set_uri(&format!("file:///{}", path.display()));
         self.player.play();
+        self.last_played = Some(path.to_owned());
         self.paused = false;
     }
     fn pause(&mut self) {
         self.player.pause();
         self.paused = true;
     }
+    fn is_paused(&self) -> bool {
+        self.paused
+    }
+
     fn toggle(&mut self) {
         match self.paused {
             true => self.player.play(),

@@ -45,6 +45,7 @@ pub struct Interface {
     pub expanded: HashSet<String>,
     pub list_index: usize,
     pub list_offset: usize,
+    pub play_index: usize,
     pub input: String,
     pub focus: Focusable,
     pub progress: (f64, u64, u64),
@@ -84,6 +85,7 @@ impl Interface {
             file_list: vec![],
             expanded: HashSet::new(),
             list_index: 0,
+            play_index: 0,
             list_offset: 0,
             focus: Focusable::FileList,
             input: String::new(),
@@ -161,6 +163,8 @@ impl Interface {
                 player_state::render(self, &chunks[1], f);
             })?;
 
+            self.ensure_continue();
+
             match self.evt_rx.recv()? {
                 Event::Input(key) => match key {
                     Key::Char('q') => {
@@ -176,6 +180,56 @@ impl Interface {
                 },
                 _ => {}
             }
+        }
+    }
+
+    fn play(&mut self, index: usize) {
+        match self.file_list.get(index) {
+            Some(tn) => {
+                // If it's a folder, expand the folder
+                if tn.children.is_some() {
+                    if !self.expanded.contains(&tn.key) {
+                        self.expanded.insert(tn.key.clone());
+                        self.rebuild_file_list();
+                    }
+                    self.play(index + 1);
+                    return;
+                }
+                self.play_index = index;
+                self.audio_backend.play(&tn.path);
+            }
+            None => {
+                self.audio_backend.pause();
+            }
+        }
+    }
+
+    fn ensure_continue(&mut self) {
+        if self.progress.1 != self.progress.2 || self.audio_backend.is_paused() {
+            return;
+        }
+
+        // check that we have the correct index, otherwise we need to search
+        let tn = self.file_list.get(self.play_index);
+        let last_played = self.audio_backend.last_played();
+
+        match (tn, last_played) {
+            (Some(tn), Some(last_played)) => {
+                if tn.path == *last_played {
+                    // Very good, the list has not shifted around, we do not need to search
+                    self.play(self.play_index + 1);
+                    return;
+                }
+
+                // let's hope that it is expanded in the file list
+                if let Some(i) = self.file_list.iter().position(|tn| tn.path == *last_played) {
+                    self.play(i + 1);
+                    return;
+                }
+
+                // last ditch effort - check if it is a collapsed child of root and, expand it.
+            }
+            _ => return,
         }
     }
 }
