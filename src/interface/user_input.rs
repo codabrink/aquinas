@@ -37,7 +37,7 @@ pub fn handle_input(state: &mut Interface, key: Key) {
     }
 }
 
-fn process_cmd(state: &mut Interface) {
+pub fn process_cmd(state: &mut Interface) {
     match state.focus {
         Focusable::Dir => {
             let mut input = state.input.clone();
@@ -48,7 +48,7 @@ fn process_cmd(state: &mut Interface) {
 
             let path = match (input_str, &state.root) {
                 ("..", Some(root)) => {
-                    let path = root.path();
+                    let path = &root.path;
                     let parent = match path.parent() {
                         Some(parent) => parent,
                         _ => path,

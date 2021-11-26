@@ -7,7 +7,7 @@ use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
 use std::{
     io::{self, Stdout},
-    path::{Path, PathBuf},
+    path::Path,
     rc::Rc,
     thread,
     time::Duration,
@@ -41,11 +41,12 @@ pub struct Interface {
     evt_rx: Receiver<Event>,
     pub audio_backend: Box<dyn Backend>,
     pub root: Option<Rc<TreeNode>>,
-    pub file_list: Vec<ListElement>,
+    pub file_list: Vec<Rc<TreeNode>>,
     pub expanded: HashSet<String>,
     pub list_offset: usize,
     pub input: String,
     pub focus: Focusable,
+    pub progress: (f64, u64, u64),
 }
 
 impl Interface {
@@ -72,9 +73,11 @@ impl Interface {
         });
 
         let path = std::env::current_dir().expect("Could not get current dir.");
+        let audio_backend = backends::load();
+        let progress = audio_backend.progress();
 
         let mut interface = Self {
-            audio_backend: backends::load(),
+            audio_backend,
             evt_rx,
             root: None,
             file_list: vec![],
@@ -82,25 +85,35 @@ impl Interface {
             list_offset: 0,
             focus: Focusable::FileList,
             input: String::new(),
+            progress,
         };
         interface.set_root(&path);
+
+        // Development code
+        interface.focus = Focusable::Dir;
+        interface.input = "~/Music".to_owned();
+        user_input::process_cmd(&mut interface);
 
         interface
     }
 
     pub fn set_root(&mut self, path: &Path) {
-        let path = PathBuf::from(path);
-        let root = Rc::new(TreeNode::Folder(path.to_folder()));
-        self.expanded.insert(root.key().clone());
+        let path = path.to_owned();
+        let root = Rc::new(path.to_tree_node(&self.expanded));
+        self.expanded.insert(root.key.to_owned());
         self.root = Some(root);
         self.rebuild_file_list();
     }
 
     pub fn rebuild_file_list(&mut self) {
-        self.file_list = match &self.root {
-            Some(root) => root.flatten(&self.expanded),
-            _ => vec![],
+        let path = match &self.root {
+            Some(root) => root.path.clone(),
+            None => return,
         };
+
+        let root = Rc::new(path.to_tree_node(&self.expanded));
+        self.file_list = root.flatten();
+        self.root = Some(root);
     }
 
     pub fn render_loop(&mut self) -> Result<()> {
@@ -113,6 +126,8 @@ impl Interface {
         let mut height = 0;
 
         loop {
+            self.progress = self.audio_backend.progress();
+
             terminal.draw(|f| {
                 height = f.size().height;
 
@@ -137,7 +152,7 @@ impl Interface {
 
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints(vec![Constraint::Length(50), Constraint::Min(1)])
+                    .constraints(vec![Constraint::Ratio(1, 3), Constraint::Ratio(2, 3)])
                     .split(v_chunks[v_chunks.len() - 1]);
 
                 file_list::render_file_list(self, &mut list_state, chunks[0], f);

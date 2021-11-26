@@ -21,5 +21,5 @@ pub trait Backend {
     fn toggle(&mut self);
     fn seek(&mut self, time: u64);
     fn seek_delta(&mut self, delta_time: i64);
-    fn progress(&mut self) -> (f64, u64, u64); // (pct, pos, dur)
+    fn progress(&self) -> (f64, u64, u64); // (pct, pos, dur)
 }

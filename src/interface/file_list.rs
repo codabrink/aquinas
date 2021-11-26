@@ -22,10 +22,10 @@ pub fn render_file_list<'a>(
         .collect();
 
     let mut title = match &state.root {
-        Some(root) => root.file(),
+        Some(root) => root.title.clone(),
         _ => String::from("No Folder"),
     };
-    title.push_str(&" ".repeat(80 - title.len()));
+    title.push_str(&" ".repeat(area.width as usize - title.len()));
 
     let list = List::new(list_items)
         .block(
@@ -50,9 +50,9 @@ pub fn render_file_list<'a>(
     frame.render_stateful_widget(list, area, list_state);
 }
 
-fn render_list_item<'a>(state: &'a Interface, el: &'a ListElement) -> ListItem<'a> {
-    ListItem::new(match el.is_folder {
-        true => Spans::from(vec![
+fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> {
+    ListItem::new(match el.children {
+        Some(_) => Spans::from(vec![
             Span::from(" ".repeat(el.depth * 2)),
             Span::from(match state.expanded.contains(&el.key) {
                 true => "▼ ",
@@ -65,7 +65,7 @@ fn render_list_item<'a>(state: &'a Interface, el: &'a ListElement) -> ListItem<'
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
-        false => Spans::from(vec![
+        None => Spans::from(vec![
             Span::from(" ".repeat(el.depth * 2)),
             Span::from(el.title.as_ref()),
         ]),
@@ -103,12 +103,10 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
         Key::Right | Key::Ctrl('f') => {
             if let Some(i) = list_state.selected() {
                 let i = i + state.list_offset;
-                if let Some(el) = state.file_list.get(i) {
-                    if let Some(tn) = el.tn.upgrade() {
-                        if let TreeNode::Folder(f) = &*tn {
-                            state.expanded.insert(f.key.clone());
-                            state.rebuild_file_list();
-                        }
+                if let Some(tn) = state.file_list.get(i) {
+                    if let Some(_) = tn.children {
+                        state.expanded.insert(tn.key.clone());
+                        state.rebuild_file_list();
                     }
                 }
             }
@@ -116,12 +114,10 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
         Key::Left | Key::Ctrl('b') => {
             if let Some(i) = list_state.selected() {
                 let i = i + state.list_offset;
-                if let Some(el) = state.file_list.get(i) {
-                    if let Some(tn) = el.tn.upgrade() {
-                        if let TreeNode::Folder(f) = &*tn {
-                            state.expanded.remove(&f.key);
-                            state.rebuild_file_list();
-                        }
+                if let Some(tn) = state.file_list.get(i) {
+                    if let Some(_) = tn.children {
+                        state.expanded.remove(&tn.key);
+                        state.rebuild_file_list();
                     }
                 }
             }
@@ -141,11 +137,9 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
         Key::Char('\n') => {
             if let Some(i) = list_state.selected() {
                 let i = i + state.list_offset;
-                if let Some(el) = state.file_list.get(i) {
-                    if let Some(tn) = el.tn.upgrade() {
-                        if let TreeNode::File(f) = &*tn {
-                            state.audio_backend.play(&f.path);
-                        }
+                if let Some(tn) = state.file_list.get(i) {
+                    if tn.children.is_none() {
+                        state.audio_backend.play(&tn.path);
                     }
                 }
             }

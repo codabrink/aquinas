@@ -90,7 +90,7 @@ impl super::Backend for GStreamer {
         self.seek((time_pos + delta_time).max(0) as u64)
     }
 
-    fn progress(&mut self) -> (f64, u64, u64) {
+    fn progress(&self) -> (f64, u64, u64) {
         let time_pos = match self.player.position() {
             Some(t) => ClockTime::seconds(t),
             None => 0,
