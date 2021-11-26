@@ -30,9 +30,10 @@ State of the interface.
 - [x] Seek forward / backward
 - [x] Gstreamer backend integration
 - [ ] Alternative backend integrations
-- [ ] Automatically play next song
+- [x] Automatically play next song
 - [ ] Search
-- [ ] Sorting / ordering
+- [x] Sorting / ordering (Basic)
+  - [ ] Advanced sorting / ordering
 - [ ] Now playing info
 - [ ] Help info
 - [ ] General all around polish
