@@ -39,7 +39,7 @@ pub enum Focusable {
 
 pub struct Interface {
     evt_rx: Receiver<Event>,
-    pub audio_backend: Box<dyn Backend>,
+    pub backend: Box<dyn Backend>,
     pub root: Option<Rc<TreeNode>>,
     pub file_list: Vec<Rc<TreeNode>>,
     pub expanded: HashSet<String>,
@@ -75,11 +75,11 @@ impl Interface {
         });
 
         let path = std::env::current_dir().expect("Could not get current dir.");
-        let audio_backend = backends::load();
-        let progress = audio_backend.progress();
+        let backend = backends::load();
+        let progress = backend.progress();
 
         let mut interface = Self {
-            audio_backend,
+            backend,
             evt_rx,
             root: None,
             file_list: vec![],
@@ -130,7 +130,7 @@ impl Interface {
         let mut height = 0;
 
         loop {
-            self.progress = self.audio_backend.progress();
+            self.progress = self.backend.progress();
 
             terminal.draw(|f| {
                 height = f.size().height;
@@ -211,22 +211,22 @@ impl Interface {
                 }
 
                 self.play_index = index;
-                self.audio_backend.play(&tn.path);
+                self.backend.play(&tn.path);
             }
             None => {
-                self.audio_backend.pause();
+                self.backend.pause();
             }
         }
     }
 
     fn ensure_continue(&mut self) {
-        if self.progress.1 != self.progress.2 || self.audio_backend.is_paused() {
+        if self.progress.1 != self.progress.2 || self.backend.is_paused() {
             return;
         }
 
         // check that we have the correct index, otherwise we need to search
         let tn = self.file_list.get(self.play_index);
-        let last_played = self.audio_backend.last_played();
+        let last_played = self.backend.last_played();
 
         match (tn, last_played) {
             (Some(tn), Some(last_played)) => {

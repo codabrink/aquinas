@@ -51,8 +51,8 @@ pub fn render_file_list<'a>(
 }
 
 fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> {
-    ListItem::new(match el.children {
-        Some(_) => Spans::from(vec![
+    ListItem::new(match (&el.children, state.backend.last_played()) {
+        (Some(_), _) => Spans::from(vec![
             Span::from(" ".repeat(el.depth * 2)),
             Span::from(match state.expanded.contains(&el.key) {
                 true => "▼ ",
@@ -65,7 +65,11 @@ fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> 
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
-        None => Spans::from(vec![
+        (_, Some(lp)) if *lp == el.path => Spans::from(vec![Span::styled(
+            format!("{}{}", " ".repeat(el.depth * 2), el.title),
+            Style::default().bg(Color::White).fg(Color::Black),
+        )]),
+        _ => Spans::from(vec![
             Span::from(" ".repeat(el.depth * 2)),
             Span::from(el.title.as_ref()),
         ]),
@@ -109,21 +113,21 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
             }
         }
         Key::Char('f') => {
-            state.audio_backend.seek_delta(2);
+            state.backend.seek_delta(2);
         }
         Key::Char('F') => {
-            state.audio_backend.seek_delta(5);
+            state.backend.seek_delta(5);
         }
         Key::Char('b') => {
-            state.audio_backend.seek_delta(-2);
+            state.backend.seek_delta(-2);
         }
         Key::Char('B') => {
-            state.audio_backend.seek_delta(-5);
+            state.backend.seek_delta(-5);
         }
         Key::Char('\n') => {
             state.play(state.list_index);
         }
-        Key::Char(' ') => state.audio_backend.toggle(),
+        Key::Char(' ') => state.backend.toggle(),
         Key::Char('d') => state.focus = Focusable::Dir,
         Key::Char('s') => state.focus = Focusable::Search,
         _ => {}
