@@ -58,6 +58,20 @@ impl AquinasPathBuf for PathBuf {
                 let is_file = path.is_file();
                 let key = path.as_str().to_owned();
 
+                if is_file {
+                    match path.extension() {
+                        Some(ext) => match ext.to_str() {
+                            Some(ext) => {
+                                if !SUPPORTED.contains(&&ext.to_lowercase().as_str()) {
+                                    continue;
+                                }
+                            }
+                            _ => continue,
+                        },
+                        _ => continue,
+                    }
+                }
+
                 let children = match is_file {
                     false if expand.contains(&key) => Some(collect(&path, depth + 1, expand)?),
                     true => None,

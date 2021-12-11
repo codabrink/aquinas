@@ -195,22 +195,17 @@ impl Interface {
                     return;
                 }
 
-                match tn.path.extension() {
-                    Some(ext) => match ext.to_str().unwrap().to_lowercase().as_str() {
-                        "mp3" | "ogg" | "flac" | "wav" => {}
-                        _ => {
-                            self.play(index + 1);
+                if let Some(ext) = tn.path.extension() {
+                    if let Some(ext) = ext.to_str() {
+                        if SUPPORTED.contains(&&ext.to_lowercase().as_str()) {
+                            self.play_index = index;
+                            self.backend.play(&tn.path);
                             return;
                         }
-                    },
-                    _ => {
-                        self.play(index + 1);
-                        return;
                     }
                 }
 
-                self.play_index = index;
-                self.backend.play(&tn.path);
+                self.play(index + 1);
             }
             None => {
                 self.backend.pause();

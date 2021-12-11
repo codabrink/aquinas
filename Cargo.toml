@@ -14,3 +14,10 @@ termion = "1.5"
 tui = "0.16"
 crossbeam-channel = "0.5"
 hashbrown = "0.11"
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "aquinas_benches"
+harness = false

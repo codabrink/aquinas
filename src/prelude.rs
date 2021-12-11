@@ -10,3 +10,4 @@ pub use std::{
 
 pub use crate::backends::Backend;
 pub use file_tree::*;
+pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "flac", "wav"];
