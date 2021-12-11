@@ -42,6 +42,7 @@ pub trait AquinasPathBuf {
   fn to_tree_node(&self, expand: &HashSet<String>) -> TreeNode;
   fn as_str(&self) -> &str;
   fn file(&self) -> String;
+  fn supported(&self) -> bool;
 }
 
 impl AquinasPathBuf for PathBuf {
@@ -54,18 +55,8 @@ impl AquinasPathBuf for PathBuf {
         let is_file = path.is_file();
         let key = path.as_str().to_owned();
 
-        if is_file {
-          match path.extension() {
-            Some(ext) => match ext.to_str() {
-              Some(ext) => {
-                if !SUPPORTED.contains(&&ext.to_lowercase().as_str()) {
-                  continue;
-                }
-              }
-              _ => continue,
-            },
-            _ => continue,
-          }
+        if is_file && !path.supported() {
+          continue;
         }
 
         let children = match is_file {
@@ -94,6 +85,17 @@ impl AquinasPathBuf for PathBuf {
       title: self.file(),
       children: Some(collect(self, 0, expand).expect("Could not build file tree.")),
     }
+  }
+
+  fn supported(&self) -> bool {
+    if let Some(ext) = self.extension() {
+      if let Some(ext) = ext.to_str() {
+        if SUPPORTED.contains(&&ext.to_lowercase().as_str()) {
+          return true;
+        }
+      }
+    }
+    false
   }
 
   fn as_str(&self) -> &str {

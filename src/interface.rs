@@ -193,16 +193,10 @@ impl Interface {
           }
           self.play(index + 1);
           return;
-        }
-
-        if let Some(ext) = tn.path.extension() {
-          if let Some(ext) = ext.to_str() {
-            if SUPPORTED.contains(&&ext.to_lowercase().as_str()) {
-              self.play_index = index;
-              self.backend.play(&tn.path);
-              return;
-            }
-          }
+        } else if tn.path.supported() {
+          self.play_index = index;
+          self.backend.play(&tn.path);
+          return;
         }
 
         self.play(index + 1);
@@ -214,7 +208,7 @@ impl Interface {
   }
 
   fn ensure_continue(&mut self) {
-    if self.progress.1 != self.progress.2 || self.backend.is_paused() {
+    if self.progress.2 == 0 || self.progress.1 != self.progress.2 || self.backend.is_paused() {
       return;
     }
 
