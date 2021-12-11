@@ -137,37 +137,36 @@ impl Interface {
 
                 let v_constraints = match self.focus {
                     Focusable::Dir | Focusable::Search => {
-                        vec![Constraint::Length(3), Constraint::Min(1)]
+                        vec![
+                            Constraint::Length(3),
+                            Constraint::Min(1),
+                            Constraint::Length(2),
+                        ]
                     }
-                    _ => vec![Constraint::Min(1)],
+                    _ => vec![Constraint::Min(1), Constraint::Length(2)],
                 };
 
-                let v_chunks = Layout::default()
+                let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .constraints(v_constraints)
                     .split(f.size());
 
                 match self.focus {
                     Focusable::Dir | Focusable::Search => {
-                        user_input::render(self, v_chunks[0], f);
+                        user_input::render(self, chunks[0], f);
                     }
                     _ => {}
                 }
 
-                let chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints(vec![Constraint::Ratio(1, 3), Constraint::Ratio(2, 3)])
-                    .split(v_chunks[v_chunks.len() - 1]);
-
-                file_list::render_file_list(self, &mut list_state, chunks[0], f);
-                player_state::render(self, &chunks[1], f);
+                file_list::render_file_list(self, &mut list_state, chunks[chunks.len() - 2], f);
+                player_state::render(self, &chunks.last().unwrap(), f);
             })?;
 
             self.ensure_continue();
 
             match self.evt_rx.recv()? {
                 Event::Input(key) => match key {
-                    Key::Char('q') => {
+                    Key::Char('q') | Key::Esc => {
                         drop(terminal);
                         std::process::exit(0);
                     }
