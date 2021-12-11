@@ -3,5 +3,5 @@ mod interface;
 mod prelude;
 
 fn main() {
-    let _ = interface::Interface::new().render_loop();
+  let _ = interface::Interface::new().render_loop();
 }
