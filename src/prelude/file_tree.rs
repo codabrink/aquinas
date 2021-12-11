@@ -59,6 +59,15 @@ impl AquinasPathBuf for PathBuf {
           continue;
         }
 
+        // hide .files
+        if let Some(file_name) = path.file_name() {
+          if let Some(file_name) = file_name.to_str() {
+            if file_name.chars().next() == Some('.') {
+              continue;
+            }
+          }
+        }
+
         let children = match is_file {
           false if expand.contains(&key) => Some(collect(&path, depth + 1, expand)?),
           true => None,
