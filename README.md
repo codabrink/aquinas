@@ -1,4 +1,4 @@
-⚠️ Under development. Works on Linux. Very basic, don't expect many features, but usable.
+Under development. Basic functionality works. I use this personally. Will add search soon.
 
 # Aquinas Media Player
 
