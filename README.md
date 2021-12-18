@@ -21,7 +21,7 @@ Built primarily with people who have a local and organized music collection in m
 
 State of the interface.
 
-![image](https://user-images.githubusercontent.com/779390/142747234-1b4ef088-2903-42b1-b901-3bdd700685d4.png)
+![image](https://user-images.githubusercontent.com/779390/146649058-0ae0e0bd-536b-4625-8884-0b84d4ff1d39.png)
 
 ### Features
 - [x] Play music
