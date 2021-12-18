@@ -82,7 +82,7 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
       state.list_index = (state.list_index + 1).min(state.file_list.len().saturating_sub(1));
       state.list_offset = state
         .list_offset
-        .max(state.list_index.saturating_sub(height.saturating_sub(1)));
+        .max(state.list_index.saturating_sub(height.saturating_sub(3)));
       list_state.select(Some(state.list_index.saturating_sub(state.list_offset)));
     }
     Key::Up | Key::Ctrl('p') => {
