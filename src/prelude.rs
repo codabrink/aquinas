@@ -1,6 +1,6 @@
 mod file_tree;
 
-pub use anyhow::Result;
+pub use anyhow::{bail, Result};
 pub use hashbrown::HashSet;
 pub use std::{
   path::{Path, PathBuf},

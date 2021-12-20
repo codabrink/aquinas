@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{metadata::Metadata, prelude::*};
 use anyhow::Result;
 use std::{
   fs,
@@ -14,6 +14,7 @@ pub struct TreeNode {
   pub depth: usize,
   pub title: String,
   pub key: String,
+  pub metadata: Option<Metadata>,
   pub children: Option<Vec<Rc<TreeNode>>>,
 }
 
@@ -74,10 +75,19 @@ impl AquinasPathBuf for PathBuf {
           false => Some(vec![]),
         };
 
+        let metadata = crate::metadata::get_metadata(&path).ok();
+
         result.push(Rc::new(TreeNode {
           depth,
           key,
-          title: path.file(),
+          title: match &metadata {
+            Some(m) => match (&m.artist, &m.title) {
+              (Some(a), Some(t)) => format!("{} - {}", a, t),
+              _ => path.file(),
+            },
+            None => path.file(),
+          },
+          metadata,
           path,
           children,
         }));
@@ -92,6 +102,7 @@ impl AquinasPathBuf for PathBuf {
       path: self.clone(),
       key: self.as_str().to_owned(),
       title: self.file(),
+      metadata: None,
       children: Some(collect(self, 0, expand).expect("Could not build file tree.")),
     }
   }

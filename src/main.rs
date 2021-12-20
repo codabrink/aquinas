@@ -1,5 +1,6 @@
 mod backends;
 mod interface;
+mod metadata;
 mod prelude;
 
 fn main() {
