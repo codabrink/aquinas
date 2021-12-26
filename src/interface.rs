@@ -46,6 +46,7 @@ pub struct Interface {
   pub list_index: usize,
   pub list_offset: usize,
   pub play_index: usize,
+  pub playing: Option<Rc<TreeNode>>,
   pub input: String,
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
@@ -86,6 +87,7 @@ impl Interface {
       expanded: HashSet::new(),
       list_index: 0,
       play_index: 0,
+      playing: None,
       list_offset: 0,
       focus: Focusable::FileList,
       input: String::new(),
@@ -185,6 +187,7 @@ impl Interface {
   fn play(&mut self, index: usize) {
     match self.file_list.get(index) {
       Some(tn) => {
+        self.playing = Some(tn.clone());
         // If it's a folder, expand the folder
         if tn.children.is_some() {
           if !self.expanded.contains(&tn.key) {

@@ -23,8 +23,16 @@ pub fn render<'a>(state: &'a mut Interface, area: &Rect, frame: &mut Frame) {
     .gauge_style(Style::default().fg(Color::Blue))
     .percent((pct * 100.) as u16)
     .label(format!(
-      "{}:{:0>2}/{}:{:0>2}",
-      pos_min, pos_sec, dur_min, dur_sec
+      "{}{}:{:0>2}/{}:{:0>2}",
+      state
+        .playing
+        .as_ref()
+        .map(|p| format!("{} - ", p.title))
+        .unwrap_or(String::new()),
+      pos_min,
+      pos_sec,
+      dur_min,
+      dur_sec
     ));
 
   frame.render_widget(gauge, chunks[0]);

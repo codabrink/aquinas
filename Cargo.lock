@@ -42,6 +42,7 @@ dependencies = [
  "opus_headers",
  "termion",
  "tui",
+ "walkdir",
 ]
 
 [[package]]
