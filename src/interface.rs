@@ -19,13 +19,13 @@ use termion::{
   screen::AlternateScreen,
 };
 use tui::{
-  backend::TermionBackend,
+  backend::CrosstermBackend,
   layout::{Constraint, Direction, Layout},
   widgets::ListState,
   Terminal as TuiTerminal,
 };
 
-pub type Frame<'a> = tui::Frame<'a, TermionBackend<AlternateScreen<RawTerminal<Stdout>>>>;
+pub type Frame<'a> = tui::Frame<'a, CrosstermBackend<AlternateScreen<RawTerminal<Stdout>>>>;
 
 enum Event {
   Input(Key),
@@ -125,7 +125,7 @@ impl Interface {
   pub fn render_loop(&mut self) -> Result<()> {
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = TuiTerminal::new(backend)?;
 
     let mut list_state = ListState::default();

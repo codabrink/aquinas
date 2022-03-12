@@ -1,7 +1,8 @@
+mod file_iter;
 mod file_tree;
 
 pub use anyhow::{bail, Result};
-pub use hashbrown::HashSet;
+pub use hashbrown::{HashMap, HashSet};
 pub use std::{
   ffi::OsStr,
   fs,

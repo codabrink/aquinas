@@ -1,5 +1,4 @@
 use crate::{metadata::Metadata, prelude::*};
-use anyhow::Result;
 use std::{
   fs,
   path::{Path, PathBuf},
