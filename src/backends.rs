@@ -24,4 +24,5 @@ pub trait Backend {
   fn seek(&mut self, time: u64);
   fn seek_delta(&mut self, delta_time: i64);
   fn progress(&self) -> (f64, u64, u64); // (pct, pos, dur)
+  fn tags(&self, path: &Path) -> Vec<String>;
 }

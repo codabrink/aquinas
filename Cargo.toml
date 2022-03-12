@@ -14,6 +14,14 @@ termion = "1.5"
 tui = "0.16"
 crossbeam-channel = "0.5"
 hashbrown = "0.11"
+walkdir = "2"
+
+# mp3, flac
+audiotags = "0.2"
+# opus
+opus_headers = "0.1"
+# ogg
+lewton = "0.10"
 
 [dev-dependencies]
 criterion = "0.3"

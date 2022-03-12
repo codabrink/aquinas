@@ -1,8 +1,10 @@
 mod file_tree;
 
-pub use anyhow::Result;
+pub use anyhow::{bail, Result};
 pub use hashbrown::HashSet;
 pub use std::{
+  ffi::OsStr,
+  fs,
   path::{Path, PathBuf},
   thread,
   time::Duration,

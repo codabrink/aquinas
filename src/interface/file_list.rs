@@ -126,6 +126,9 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
     }
     Key::Char('\n') => {
       state.play(state.list_index);
+      if let Some(root) = &state.root {
+        state.backend.tags(&root.path);
+      }
     }
     Key::Char(' ') => state.backend.toggle(),
     Key::Char('d') => state.focus = Focusable::Dir,
