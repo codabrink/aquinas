@@ -1,5 +1,4 @@
 mod backends;
-mod index;
 mod interface;
 mod metadata;
 mod prelude;

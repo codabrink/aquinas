@@ -1,5 +1,5 @@
 mod file_iter;
-mod file_tree;
+// mod file_tree;
 
 pub use anyhow::{bail, Result};
 pub use hashbrown::{HashMap, HashSet};
@@ -12,5 +12,5 @@ pub use std::{
 };
 
 pub use crate::backends::Backend;
-pub use file_tree::*;
+pub use file_iter::*;
 pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "flac", "wav"];

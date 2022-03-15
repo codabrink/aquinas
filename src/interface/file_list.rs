@@ -17,14 +17,11 @@ pub fn render_file_list<'a>(
 ) {
   let list_items: Vec<ListItem> = state.file_list
     [state.list_offset..(state.list_offset + area.height as usize).min(state.file_list.len())]
-    .iter()
-    .map(|tn| render_list_item(state, tn))
+    .into_iter()
+    .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();
 
-  let mut title = match &state.root {
-    Some(root) => root.title.clone(),
-    _ => String::from("No Folder"),
-  };
+  let mut title = state.root.name;
   title.push_str(&" ".repeat(area.width as usize - title.len()));
 
   let list = List::new(list_items)
@@ -50,16 +47,16 @@ pub fn render_file_list<'a>(
   frame.render_stateful_widget(list, area, list_state);
 }
 
-fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> {
-  ListItem::new(match (&el.children, state.backend.last_played()) {
-    (Some(_), _) => Spans::from(vec![
-      Span::from(" ".repeat(el.depth * 2)),
-      Span::from(match state.expanded.contains(&el.key) {
+fn render_list_item<'a>(state: &'a Interface, el: &'a Node, depth: usize) -> ListItem<'a> {
+  ListItem::new(match (&el, state.backend.last_played()) {
+    (Node::Dir((path, name)), _) => Spans::from(vec![
+      Span::from(" ".repeat(depth * 2)),
+      Span::from(match state.dirs.contains_key(path) {
         true => "▼ ",
         false => "▶ ",
       }),
       Span::styled(
-        &el.title,
+        name,
         Style::default()
           .fg(Color::Cyan)
           .add_modifier(Modifier::BOLD),
@@ -76,7 +73,12 @@ fn render_list_item<'a>(state: &'a Interface, el: &'a TreeNode) -> ListItem<'a> 
   })
 }
 
-pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key, height: usize) {
+pub fn handle_input<'a>(
+  state: &'a mut Interface<'a>,
+  list_state: &mut ListState,
+  key: Key,
+  height: usize,
+) {
   match key {
     Key::Down | Key::Ctrl('n') => {
       state.list_index = (state.list_index + 1).min(state.file_list.len().saturating_sub(1));
@@ -93,9 +95,9 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
     Key::Right | Key::Ctrl('f') => {
       if let Some(i) = list_state.selected() {
         let i = i + state.list_offset;
-        if let Some(tn) = state.file_list.get(i) {
-          if let Some(_) = tn.children {
-            state.expanded.insert(tn.key.clone());
+        if let Some((node, depth)) = state.file_list.get(i) {
+          if let Node::Dir(path) = node {
+            state.dirs.insert(path.clone(), Dir::new(path));
             state.rebuild_file_list();
           }
         }
@@ -104,9 +106,9 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
     Key::Left | Key::Ctrl('b') => {
       if let Some(i) = list_state.selected() {
         let i = i + state.list_offset;
-        if let Some(tn) = state.file_list.get(i) {
-          if let Some(_) = tn.children {
-            state.expanded.remove(&tn.key);
+        if let Some((node, depth)) = state.file_list.get(i) {
+          if let Node::Dir(path) = node {
+            state.dirs.remove(path);
             state.rebuild_file_list();
           }
         }
@@ -126,9 +128,9 @@ pub fn handle_input(state: &mut Interface, list_state: &mut ListState, key: Key,
     }
     Key::Char('\n') => {
       state.play(state.list_index);
-      if let Some(root) = &state.root {
-        state.backend.tags(&root.path);
-      }
+      // if let Some(root) = &state.root {
+      // state.backend.tags(&root.path);
+      // }
     }
     Key::Char(' ') => state.backend.toggle(),
     Key::Char('d') => state.focus = Focusable::Dir,

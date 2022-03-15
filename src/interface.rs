@@ -8,7 +8,6 @@ use crossbeam_channel::{unbounded, Receiver};
 use std::{
   io::{self, Stdout},
   path::Path,
-  rc::Rc,
   thread,
   time::Duration,
 };
@@ -37,22 +36,22 @@ pub enum Focusable {
   Search,
 }
 
-pub struct Interface {
+pub struct Interface<'a> {
   evt_rx: Receiver<Event>,
   pub backend: Box<dyn Backend>,
-  pub root: Option<Rc<TreeNode>>,
-  pub file_list: Vec<Rc<TreeNode>>,
-  pub expanded: HashSet<String>,
+  pub dirs: Dirs,
+  pub root: Dir,
+  pub file_list: Vec<(&'a Node, usize)>,
   pub list_index: usize,
   pub list_offset: usize,
   pub play_index: usize,
-  pub playing: Option<Rc<TreeNode>>,
+  pub playing: Option<&'a File>,
   pub input: String,
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
 }
 
-impl Interface {
+impl<'a> Interface<'a> {
   pub fn new() -> Self {
     let (evt_tx, evt_rx) = unbounded();
 
@@ -82,9 +81,9 @@ impl Interface {
     let mut interface = Self {
       backend,
       evt_rx,
-      root: None,
+      root: Dir::new(path),
+      dirs: HashMap::new(),
       file_list: vec![],
-      expanded: HashSet::new(),
       list_index: 0,
       play_index: 0,
       playing: None,
@@ -103,26 +102,18 @@ impl Interface {
     interface
   }
 
-  pub fn set_root(&mut self, path: &Path) {
+  pub fn set_root(&'a mut self, path: &Path) {
     let path = path.to_owned();
-    let root = Rc::new(path.to_tree_node(&self.expanded));
-    self.expanded.insert(root.key.to_owned());
-    self.root = Some(root);
+    self.root = Dir::new(path);
+
     self.rebuild_file_list();
   }
 
-  pub fn rebuild_file_list(&mut self) {
-    let path = match &self.root {
-      Some(root) => root.path.clone(),
-      None => return,
-    };
-
-    let root = Rc::new(path.to_tree_node(&self.expanded));
-    self.file_list = root.flatten();
-    self.root = Some(root);
+  pub fn rebuild_file_list(&'a mut self) {
+    self.file_list = self.root.iter(&mut self.dirs, &self.root.path).collect();
   }
 
-  pub fn render_loop(&mut self) -> Result<()> {
+  pub fn render_loop(&'a mut self) -> Result<()> {
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = AlternateScreen::from(stdout);
     let backend = CrosstermBackend::new(stdout);
@@ -184,26 +175,22 @@ impl Interface {
     }
   }
 
-  fn play(&mut self, index: usize) {
+  fn play(&'a mut self, index: usize) {
     match self.file_list.get(index) {
-      Some(tn) => {
-        self.playing = Some(tn.clone());
-        // If it's a folder, expand the folder
-        if tn.children.is_some() {
-          if !self.expanded.contains(&tn.key) {
-            self.expanded.insert(tn.key.clone());
+      Some((node, _)) => match node {
+        Node::Dir((p, _)) => {
+          if self.dirs.get(p).is_none() {
+            let dir = Dir::new(p);
+            self.dirs.insert(p.clone(), dir);
             self.rebuild_file_list();
+            self.play(index + 1);
           }
-          self.play(index + 1);
-          return;
-        } else if tn.path.supported() {
-          self.play_index = index;
-          self.backend.play(&tn.path);
-          return;
         }
-
-        self.play(index + 1);
-      }
+        Node::File(f) => {
+          self.play_index = index;
+          self.backend.play(&f.path);
+        }
+      },
       None => {
         self.backend.pause();
       }
@@ -216,22 +203,26 @@ impl Interface {
     }
 
     // check that we have the correct index, otherwise we need to search
-    let tn = self.file_list.get(self.play_index);
+    let node = self.file_list.get(self.play_index);
     let last_played = self.backend.last_played();
 
-    match (tn, last_played) {
-      (Some(tn), Some(last_played)) => {
-        if tn.path == *last_played {
-          // Very good, the list has not shifted around, we do not need to search
-          self.play(self.play_index + 1);
-          return;
-        }
+    match (node, last_played) {
+      (Some((node, depth)), Some(last_played)) => {
+        // if node.path == *last_played {
+        // Very good, the list has not shifted around, we do not need to search
+        // self.play(self.play_index + 1);
+        // return;
+        // }
 
         // let's hope that it is expanded in the file list
-        if let Some(i) = self.file_list.iter().position(|tn| tn.path == *last_played) {
-          self.play(i + 1);
-          return;
-        }
+        // if let Some(i) = self
+        // .file_list
+        // .iter()
+        // .position(|node| node.path == *last_played)
+        // {
+        // self.play(i + 1);
+        // return;
+        // }
 
         // last ditch effort - check if it is a collapsed child of root and, expand it.
       }
