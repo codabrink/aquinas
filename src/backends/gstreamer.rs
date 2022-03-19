@@ -82,7 +82,9 @@ impl super::Backend for GStreamer {
   }
 
   fn play(&mut self, path: &Path) {
-    self.player.set_uri(&format!("file:///{}", path.display()));
+    self
+      .player
+      .set_uri(Some(&format!("file:///{}", path.display())));
     self.player.play();
     self.last_played = Some(path.to_owned());
     self.paused = false;

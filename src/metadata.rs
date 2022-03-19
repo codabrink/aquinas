@@ -3,7 +3,7 @@ use audiotags::Tag;
 use lewton::inside_ogg::OggStreamReader;
 use std::fs;
 
-#[derive(PartialEq, Default)]
+#[derive(PartialEq, Default, Clone, Debug)]
 pub struct Metadata {
   pub title: Option<String>,
   pub artist: Option<String>,
@@ -11,7 +11,7 @@ pub struct Metadata {
   pub track_number: Option<u16>,
 }
 
-pub fn get_metadata(path: &Path) -> Result<Metadata> {
+pub fn get_metadata(path: &Path) -> Option<Metadata> {
   match path.extension() {
     Some(ext) => {
       let ext = ext.to_string_lossy().to_lowercase();
@@ -19,8 +19,9 @@ pub fn get_metadata(path: &Path) -> Result<Metadata> {
         "ogg" => vorbis(path),
         _ => other(path),
       }
+      .ok()
     }
-    None => bail!("No extension"),
+    None => None,
   }
 }
 

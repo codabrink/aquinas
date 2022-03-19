@@ -21,7 +21,7 @@ pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
   frame.render_widget(paragraph, area);
 }
 
-pub fn handle_input(state: &mut Interface, key: Key) {
+pub fn handle_input<'a>(state: &'a mut Interface, key: Key) {
   match key {
     Key::Backspace => {
       state.input.pop();
@@ -37,7 +37,7 @@ pub fn handle_input(state: &mut Interface, key: Key) {
   }
 }
 
-pub fn process_cmd(state: &mut Interface) {
+pub fn process_cmd<'a>(state: &'a mut Interface) {
   match state.focus {
     Focusable::Dir => {
       let mut input = state.input.clone();
@@ -46,12 +46,11 @@ pub fn process_cmd(state: &mut Interface) {
       }
       let input_str = input.as_str().trim();
 
-      let path = match (input_str, &state.root) {
-        ("..", Some(root)) => {
-          let path = &root.path;
-          let parent = match path.parent() {
+      let path = match (input_str, &state.library.root) {
+        ("..", root) => {
+          let parent = match root.path.parent() {
             Some(parent) => parent,
-            _ => path,
+            _ => &root.path,
           };
           PathBuf::from(parent)
         }

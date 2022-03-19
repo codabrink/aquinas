@@ -8,7 +8,6 @@ use crossbeam_channel::{unbounded, Receiver};
 use std::{
   io::{self, Stdout},
   path::Path,
-  rc::Rc,
   thread,
   time::Duration,
 };
@@ -19,13 +18,13 @@ use termion::{
   screen::AlternateScreen,
 };
 use tui::{
-  backend::TermionBackend,
+  backend::CrosstermBackend,
   layout::{Constraint, Direction, Layout},
   widgets::ListState,
   Terminal as TuiTerminal,
 };
 
-pub type Frame<'a> = tui::Frame<'a, TermionBackend<AlternateScreen<RawTerminal<Stdout>>>>;
+pub type Frame<'a> = tui::Frame<'a, CrosstermBackend<AlternateScreen<RawTerminal<Stdout>>>>;
 
 enum Event {
   Input(Key),
@@ -40,16 +39,14 @@ pub enum Focusable {
 pub struct Interface {
   evt_rx: Receiver<Event>,
   pub backend: Box<dyn Backend>,
-  pub root: Option<Rc<TreeNode>>,
-  pub file_list: Vec<Rc<TreeNode>>,
-  pub expanded: HashSet<String>,
+  pub library: Library,
   pub list_index: usize,
   pub list_offset: usize,
-  pub play_index: usize,
-  pub playing: Option<Rc<TreeNode>>,
   pub input: String,
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
+  pub playing: Option<Rc<Node>>,
+  pub play_index: usize,
 }
 
 impl Interface {
@@ -72,7 +69,7 @@ impl Interface {
     // tick loop
     thread::spawn(move || loop {
       let _ = evt_tx.send(Event::Tick);
-      thread::sleep(Duration::from_millis(200));
+      thread::sleep(Duration::from_millis(1000));
     });
 
     let path = std::env::current_dir().expect("Could not get current dir.");
@@ -82,16 +79,14 @@ impl Interface {
     let mut interface = Self {
       backend,
       evt_rx,
-      root: None,
-      file_list: vec![],
-      expanded: HashSet::new(),
-      list_index: 0,
-      play_index: 0,
+      library: Library::new(&path),
       playing: None,
+      list_index: 0,
       list_offset: 0,
       focus: Focusable::FileList,
       input: String::new(),
       progress,
+      play_index: 0,
     };
     interface.set_root(&path);
 
@@ -100,32 +95,25 @@ impl Interface {
     interface.input = "~/Music".to_owned();
     user_input::process_cmd(&mut interface);
 
+    interface.library.rebuild();
+
     interface
   }
 
   pub fn set_root(&mut self, path: &Path) {
-    let path = path.to_owned();
-    let root = Rc::new(path.to_tree_node(&self.expanded));
-    self.expanded.insert(root.key.to_owned());
-    self.root = Some(root);
-    self.rebuild_file_list();
-  }
-
-  pub fn rebuild_file_list(&mut self) {
-    let path = match &self.root {
-      Some(root) => root.path.clone(),
-      None => return,
-    };
-
-    let root = Rc::new(path.to_tree_node(&self.expanded));
-    self.file_list = root.flatten();
-    self.root = Some(root);
+    let mut library = Library::new(path);
+    for (path, _) in &self.library.open_dirs {
+      if path.starts_with(&library.root.path) {
+        library.expand(path);
+      }
+    }
+    self.library = library;
   }
 
   pub fn render_loop(&mut self) -> Result<()> {
     let stdout = io::stdout().into_raw_mode()?;
     let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    let backend = CrosstermBackend::new(stdout);
     let mut terminal = TuiTerminal::new(backend)?;
 
     let mut list_state = ListState::default();
@@ -184,24 +172,15 @@ impl Interface {
     }
   }
 
-  fn play(&mut self, index: usize) {
-    match self.file_list.get(index) {
-      Some(tn) => {
-        self.playing = Some(tn.clone());
-        // If it's a folder, expand the folder
-        if tn.children.is_some() {
-          if !self.expanded.contains(&tn.key) {
-            self.expanded.insert(tn.key.clone());
-            self.rebuild_file_list();
-          }
-          self.play(index + 1);
-          return;
-        } else if tn.path.supported() {
-          self.play_index = index;
-          self.backend.play(&tn.path);
+  pub fn play(&mut self, index: usize) {
+    self.play_index = index;
+    match self.library.file_list.get(index) {
+      Some((node, _)) => {
+        if node.is_file() {
+          self.backend.play(&node.path());
           return;
         }
-
+        self.expand(index);
         self.play(index + 1);
       }
       None => {
@@ -210,32 +189,25 @@ impl Interface {
     }
   }
 
+  pub fn expand(&mut self, index: usize) {
+    if let Some((node, _)) = self.library.file_list.get(index) {
+      let path = node.path().to_owned();
+      self.library.expand(path);
+    }
+  }
+
+  pub fn collapse(&mut self, index: usize) {
+    if let Some((node, _)) = self.library.file_list.get(index) {
+      let path = node.path().to_owned();
+      self.library.collapse(path);
+    }
+  }
+
   fn ensure_continue(&mut self) {
     if self.progress.2 == 0 || self.progress.1 != self.progress.2 || self.backend.is_paused() {
       return;
     }
 
-    // check that we have the correct index, otherwise we need to search
-    let tn = self.file_list.get(self.play_index);
-    let last_played = self.backend.last_played();
-
-    match (tn, last_played) {
-      (Some(tn), Some(last_played)) => {
-        if tn.path == *last_played {
-          // Very good, the list has not shifted around, we do not need to search
-          self.play(self.play_index + 1);
-          return;
-        }
-
-        // let's hope that it is expanded in the file list
-        if let Some(i) = self.file_list.iter().position(|tn| tn.path == *last_played) {
-          self.play(i + 1);
-          return;
-        }
-
-        // last ditch effort - check if it is a collapsed child of root and, expand it.
-      }
-      _ => return,
-    }
+    self.play(self.play_index + 1);
   }
 }
