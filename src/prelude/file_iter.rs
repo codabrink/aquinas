@@ -172,6 +172,7 @@ impl Node {
       true => {
         let mut files = vec![];
         let mut folders = vec![];
+
         if let Ok(paths) = fs::read_dir(&path) {
           for entry in paths {
             let path = entry.unwrap().path();
@@ -183,6 +184,10 @@ impl Node {
             }
           }
         }
+
+        files.sort_by(|a, b| a.title().partial_cmp(b.title()).unwrap());
+        folders.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
         (Some(files), Some(folders))
       }
       false => (None, None),

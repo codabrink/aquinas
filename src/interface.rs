@@ -46,6 +46,7 @@ pub struct Interface {
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
   pub playing: Option<Rc<Node>>,
+  pub play_index: usize,
 }
 
 impl Interface {
@@ -85,6 +86,7 @@ impl Interface {
       focus: Focusable::FileList,
       input: String::new(),
       progress,
+      play_index: 0,
     };
     interface.set_root(&path);
 
@@ -171,8 +173,9 @@ impl Interface {
   }
 
   pub fn play(&mut self, index: usize) {
+    self.play_index = index;
     match self.library.file_list.get(index) {
-      Some((node, depth)) => {
+      Some((node, _)) => {
         if node.is_file() {
           self.backend.play(&node.path());
           return;
@@ -205,30 +208,6 @@ impl Interface {
       return;
     }
 
-    // check that we have the correct index, otherwise we need to search
-    let last_played = self.backend.last_played();
-
-    // match (node, last_played) {
-    // (Some((node, depth)), Some(last_played)) => {
-    // if node.path == *last_played {
-    // Very good, the list has not shifted around, we do not need to search
-    // self.play(self.play_index + 1);
-    // return;
-    // }
-
-    // let's hope that it is expanded in the file list
-    // if let Some(i) = self
-    // .file_list
-    // .iter()
-    // .position(|node| node.path == *last_played)
-    // {
-    // self.play(i + 1);
-    // return;
-    // }
-
-    // last ditch effort - check if it is a collapsed child of root and, expand it.
-    // }
-    // _ => return,
-    // }
+    self.play(self.play_index + 1);
   }
 }

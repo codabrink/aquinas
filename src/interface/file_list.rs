@@ -1,5 +1,4 @@
 use super::*;
-use crate::prelude::file_iter;
 use termion::event::Key;
 use tui::layout::Rect;
 use tui::widgets::List;
