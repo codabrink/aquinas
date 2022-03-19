@@ -48,9 +48,9 @@ pub fn process_cmd<'a>(state: &'a mut Interface) {
 
       let path = match (input_str, &state.library.root) {
         ("..", root) => {
-          let parent = match root.parent() {
+          let parent = match root.path.parent() {
             Some(parent) => parent,
-            _ => root,
+            _ => &root.path,
           };
           PathBuf::from(parent)
         }

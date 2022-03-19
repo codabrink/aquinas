@@ -93,13 +93,15 @@ impl Interface {
     interface.input = "~/Music".to_owned();
     user_input::process_cmd(&mut interface);
 
+    interface.library.rebuild();
+
     interface
   }
 
   pub fn set_root(&mut self, path: &Path) {
     let mut library = Library::new(path);
     for (path, _) in &self.library.open_dirs {
-      if path.starts_with(&library.root) {
+      if path.starts_with(&library.root.path) {
         library.expand(path);
       }
     }
@@ -172,7 +174,7 @@ impl Interface {
     match self.library.file_list.get(index) {
       Some((node, depth)) => {
         if node.is_file() {
-          self.backend.play(&node.path);
+          self.backend.play(&node.path());
           return;
         }
         self.expand(index);
@@ -186,8 +188,8 @@ impl Interface {
 
   pub fn expand(&mut self, index: usize) {
     if let Some((node, _)) = self.library.file_list.get(index) {
-      let node = node.clone();
-      self.library.expand(&node.path);
+      let path = node.path().to_owned();
+      self.library.expand(path);
     }
   }
 

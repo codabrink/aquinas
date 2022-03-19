@@ -1,4 +1,4 @@
-mod file_iter;
+pub mod file_iter;
 // mod file_tree;
 
 pub use anyhow::{bail, Result};

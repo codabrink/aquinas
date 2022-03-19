@@ -1,5 +1,5 @@
 use super::*;
-use crate::prelude::*;
+use crate::prelude::file_iter;
 use termion::event::Key;
 use tui::layout::Rect;
 use tui::widgets::List;
@@ -21,7 +21,7 @@ pub fn render_file_list<'a>(
     .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();
 
-  let mut title = state.library.root_node().title().to_owned();
+  let mut title = state.library.root.title().to_owned();
   title.push_str(&" ".repeat(area.width as usize - title.len()));
 
   let list = List::new(list_items)
@@ -47,11 +47,15 @@ pub fn render_file_list<'a>(
   frame.render_stateful_widget(list, area, list_state);
 }
 
-fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> ListItem<'a> {
+fn render_list_item<'a>(
+  state: &'a Interface,
+  node: &'a file_iter::ListItem,
+  depth: usize,
+) -> ListItem<'a> {
   ListItem::new(match (node.is_dir(), state.backend.last_played()) {
     (true, _) => Spans::from(vec![
       Span::from(" ".repeat(depth * 2)),
-      Span::from(match state.library.open_dirs.contains_key(&node.path) {
+      Span::from(match state.library.open_dirs.contains_key(node.path()) {
         true => "▼ ",
         false => "▶ ",
       }),
@@ -62,7 +66,7 @@ fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> L
           .add_modifier(Modifier::BOLD),
       ),
     ]),
-    (false, Some(lp)) if *lp == node.path => Spans::from(vec![Span::styled(
+    (false, Some(lp)) if *lp == node.path() => Spans::from(vec![Span::styled(
       format!("{}{}", " ".repeat(depth * 2), node.title()),
       Style::default().bg(Color::White).fg(Color::Black),
     )]),
