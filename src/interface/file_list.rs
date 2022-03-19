@@ -47,11 +47,7 @@ pub fn render_file_list<'a>(
   frame.render_stateful_widget(list, area, list_state);
 }
 
-fn render_list_item<'a>(
-  state: &'a Interface,
-  node: &'a file_iter::ListItem,
-  depth: usize,
-) -> ListItem<'a> {
+fn render_list_item<'a>(state: &'a Interface, node: &'a Element, depth: usize) -> ListItem<'a> {
   ListItem::new(match (node.is_dir(), state.backend.last_played()) {
     (true, _) => Spans::from(vec![
       Span::from(" ".repeat(depth * 2)),

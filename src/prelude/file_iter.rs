@@ -7,7 +7,7 @@ use crate::{
 };
 
 type OpenDirs = HashMap<PathBuf, Rc<Node>>;
-type FileList = Vec<(ListItem, usize)>;
+type FileList = Vec<(Element, usize)>;
 
 pub struct Library {
   pub root: Rc<Node>,
@@ -86,14 +86,14 @@ pub struct DirsIter<'a> {
 }
 
 impl<'a> Iterator for DirsIter<'a> {
-  type Item = (ListItem, usize);
+  type Item = (Element, usize);
 
   fn next(&mut self) -> Option<Self::Item> {
     let cursor = &self.cursor;
     // Next file in the folder
     if let Some(child) = cursor.child(self.child_index, &self.dirs) {
       self.child_index += 1;
-      return Some((ListItem::Node(child), self.depth));
+      return Some((child, self.depth));
     }
     // Go up a folder, and check for next folder / file
 
@@ -128,7 +128,7 @@ pub struct Node {
   expanded: bool,
 }
 
-pub enum ListItem {
+pub enum Element {
   Node(Rc<Node>),
   Path(PathBuf, String),
 }
@@ -149,14 +149,21 @@ impl Node {
     &self.name
   }
 
-  pub fn child(&self, index: usize, dirs: &OpenDirs) -> Option<Rc<Node>> {
+  pub fn child(&self, index: usize, dirs: &OpenDirs) -> Option<Element> {
     if let (Some(files), Some(folders)) = (&self.files, &self.folders) {
       let folders_len = folders.len();
       let files_len = files.len();
 
       return match index {
-        i if i < folders_len => dirs.get(&folders[i]).map(|f| f.clone()),
-        i if i < (files_len + folders_len) => Some(files[i - folders_len].clone()),
+        i if i < folders_len => match dirs.get(&folders[i]) {
+          Some(node) => Some(Element::Node(node.clone())),
+          None => {
+            let path = folders[i].to_path_buf();
+            let name = path.file_name().unwrap().to_string_lossy().to_string();
+            Some(Element::Path(path, name))
+          }
+        },
+        i if i < (files_len + folders_len) => Some(Element::Node(files[i - folders_len].clone())),
         _ => None,
       };
     }
@@ -199,7 +206,7 @@ impl Node {
   }
 }
 
-impl Display for ListItem {
+impl Display for Element {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
       Self::Node(node) => write!(f, "{}", node),
@@ -208,7 +215,7 @@ impl Display for ListItem {
   }
 }
 
-impl ListItem {
+impl Element {
   pub fn path(&self) -> &Path {
     match self {
       Self::Node(node) => &node.path,
