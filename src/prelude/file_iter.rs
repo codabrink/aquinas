@@ -96,15 +96,13 @@ impl<'a> Iterator for DirsIter<'a> {
 
     if let Some(child) = cursor.child(*child_index, &self.dirs) {
       *child_index += 1;
-      match child {
+      return match child {
         Element::Node(node) if node.is_dir() => {
           self.stack.push((node.clone(), 0));
-          return Some((Element::Node(node), self.stack.len() - 1));
+          Some((Element::Node(node), self.stack.len() - 1))
         }
-        _ => {
-          return Some((child, self.stack.len()));
-        }
-      }
+        _ => Some((child, self.stack.len())),
+      };
     }
 
     self.stack.pop();
