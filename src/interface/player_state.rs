@@ -27,7 +27,7 @@ pub fn render<'a>(state: &'a mut Interface, area: &Rect, frame: &mut Frame) {
       state
         .playing
         .as_ref()
-        .map(|p| format!("{} - ", p.metadata.title))
+        .map(|p| format!("{} - ", p))
         .unwrap_or(String::new()),
       pos_min,
       pos_sec,

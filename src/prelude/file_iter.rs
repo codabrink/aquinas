@@ -1,91 +1,66 @@
+use core::fmt;
+use std::fmt::Display;
+
 use crate::{
   metadata::{get_metadata, Metadata},
   prelude::*,
 };
 
-// A collection of expanded folders
-pub type Dirs = HashMap<PathBuf, Dir>;
+type OpenDirs = HashMap<PathBuf, Rc<Node>>;
+type FileList = Vec<(Rc<Node>, usize)>;
 
-pub trait DirsTrait<'a> {
-  fn expand(&mut self, path: impl AsRef<Path>) -> bool;
-  fn collapse(&mut self, path: impl AsRef<Path>);
-  fn collect(&'a self, root: impl AsRef<Path>) -> Vec<(BNode<'a>, usize)>;
+pub struct Library {
+  pub root: PathBuf,
+  pub open_dirs: OpenDirs,
+  pub file_list: FileList,
 }
 
-impl<'a> DirsTrait<'a> for Dirs {
-  fn expand(&mut self, path: impl AsRef<Path>) -> bool {
-    let path = path.as_ref();
-    if !path.is_dir() || self.get(path).is_some() {
-      return false;
-    }
-
-    let dir = Dir::new(path);
-    self.insert(path.to_path_buf(), dir);
-    true
-  }
-
-  fn collapse(&mut self, path: impl AsRef<Path>) {
-    self.remove(path.as_ref());
-  }
-
-  fn collect(&'a self, root: impl AsRef<Path>) -> Vec<(BNode<'a>, usize)> {
-    let result = vec![];
-    let mut depth = 0;
-    let root = match self.get(root.as_ref()) {
-      Some(dir) => dir,
-      _ => return vec![],
+impl Library {
+  pub fn new(root: impl AsRef<Path>) -> Self {
+    let mut library = Self {
+      root: root.as_ref().to_path_buf(),
+      open_dirs: HashMap::new(),
+      file_list: vec![],
     };
+    library.expand(root);
+    library
+  }
 
-    // Stack: Vec<(dir, index)>
-    let mut stack = vec![(root, 0)];
-    loop {
-      let (dir, index) = match stack.last() {
-        Some(s) => s,
-        None => {
-          return result;
-        }
-      };
-
-      match dir.children.get(*index) {
-        Some(Node::Dir((p, _))) => {
-          result.push((BNode::Dir(p), depth));
-
-          if let Some(child_dir) = self.get(p) {
-            // folder is expanded, push to the stack
-            stack.push((child_dir, 0));
-            depth += 1;
-          }
-        }
-        Some(Node::File(file)) => {
-          result.push((BNode::File(file), depth));
-        }
-        // Nothing here, pop up the stack
-        None => {
-          stack.pop();
-          depth -= 1;
-        }
-      }
-
-      // next
-      if let Some((_, i)) = stack.last_mut() {
-        *i += 1;
-      }
+  pub fn expand(&mut self, path: impl AsRef<Path>) {
+    let path = path.as_ref();
+    if !path.is_dir() || self.open_dirs.get(path).is_some() {
+      return;
     }
+
+    self
+      .open_dirs
+      .insert(path.to_path_buf(), Rc::new(Node::new(path)));
+  }
+
+  pub fn collapse(&mut self, path: impl AsRef<Path>) {
+    self.open_dirs.remove(path.as_ref());
+  }
+
+  fn rebuild(&mut self) {
+    self.file_list = self.root.as_path().to_iter(&mut self.open_dirs).collect();
   }
 }
 
 pub trait IterablePath<'a> {
-  fn iter(&self, dirs: &'a mut Dirs, root: &Path) -> DirsIter<'a>;
+  fn to_iter(&'a self, dirs: &'a OpenDirs) -> DirsIter<'a>;
 }
-impl<'a> IterablePath<'a> for Dir {
-  fn iter(&self, dirs: &'a mut Dirs, root: &Path) -> DirsIter<'a> {
-    let cursor = match dirs.get(&self.path) {
-      Some(d) => d,
-      None => {
-        dirs.insert(self.path.clone(), self.clone());
-        dirs.get(&self.path).unwrap()
-      }
+impl<'a> IterablePath<'a> for &Path {
+  fn to_iter(&self, dirs: &'a OpenDirs) -> DirsIter<'a> {
+    let start_path = match self.is_dir() {
+      true => self,
+      false => self.parent().unwrap(),
     };
+
+    let cursor = match dirs.get(start_path) {
+      Some(d) => d,
+      None => panic!("Bug: open dirs should contain the iterating path."),
+    }
+    .clone();
 
     DirsIter {
       dirs,
@@ -95,58 +70,21 @@ impl<'a> IterablePath<'a> for Dir {
     }
   }
 }
-impl<'a> IterablePath<'a> for File {
-  fn iter(&self, dirs: &'a mut Dirs, root: &Path) -> DirsIter<'a> {
-    let parent_path = self.path.parent().unwrap();
-
-    let cursor = match dirs.get(parent_path) {
-      Some(d) => d,
-      None => {
-        dirs.insert(parent_path.to_owned(), Dir::new(parent_path));
-        dirs.get(parent_path).unwrap()
-      }
-    };
-
-    let child_index = cursor
-      .children
-      .iter()
-      .position(|c| {
-        if let Node::File(f) = c {
-          return f == self;
-        }
-        false
-      })
-      .unwrap_or(0);
-
-    DirsIter {
-      dirs,
-      cursor,
-      child_index,
-      depth: 0,
-    }
-  }
-}
 
 struct DirsIter<'a> {
-  dirs: &'a Dirs,
-  cursor: *const Dir,
+  dirs: &'a OpenDirs,
+  cursor: Rc<Node>,
   child_index: usize,
   depth: usize,
 }
 
-impl<'a> DirsIter<'a> {
-  fn cursor(&self) -> &'a Dir {
-    unsafe { &*(self.cursor) }
-  }
-}
-
 impl<'a> Iterator for DirsIter<'a> {
-  type Item = (&'a Node, usize);
+  type Item = (Rc<Node>, usize);
 
   fn next(&mut self) -> Option<Self::Item> {
-    let cursor = self.cursor();
+    let cursor = &self.cursor;
     // Next file in the folder
-    if let Some(child) = cursor.children.get(self.child_index) {
+    if let Some(child) = cursor.child(self.child_index, &self.dirs) {
       self.child_index += 1;
       return Some((child, self.depth));
     }
@@ -160,7 +98,7 @@ impl<'a> Iterator for DirsIter<'a> {
       }
       // Recurse
       Some(dir) => {
-        self.cursor = dir;
+        self.cursor = dir.clone();
         self.child_index = 0;
         self.depth += 1;
         return self.next();
@@ -170,90 +108,85 @@ impl<'a> Iterator for DirsIter<'a> {
 }
 
 #[derive(Clone)]
-pub struct Dir {
-  pub path: PathBuf,
-  pub children: Vec<Node>,
-  pub name: String,
-}
-
-#[derive(PartialEq, Clone)]
-pub struct File {
+pub struct Node {
   pub path: PathBuf,
   pub metadata: Option<Metadata>,
-  pub name: String,
+  pub files: Option<Vec<Rc<Node>>>,
+  pub folders: Option<Vec<PathBuf>>,
+  name: String,
 }
-
-#[derive(Clone)]
-pub enum Node {
-  File(File),
-  Dir((PathBuf, String)),
+pub enum Child<'a> {
+  File(Rc<Node>),
+  Folder(&'a Path),
 }
 
 impl Node {
   pub fn is_dir(&self) -> bool {
-    if let Self::Dir(_) = self {
-      return true;
-    }
-    false
+    self.path.is_dir()
   }
   pub fn is_file(&self) -> bool {
-    if let Self::File(_) = self {
-      return true;
-    }
-    false
+    self.path.is_file()
   }
   pub fn title(&self) -> &str {
-    match self {
-      Self::Dir((_, name)) => name,
-      Self::File(f) => f.name,
+    if let Some(m) = &self.metadata {
+      if let Some(t) = &m.title {
+        return &t;
+      }
     }
+    &self.name
   }
-}
 
-pub enum BNode<'a> {
-  File(&'a File),
-  Dir(&'a Path),
-}
+  pub fn child(&self, index: usize, dirs: &OpenDirs) -> Option<Rc<Node>> {
+    if let (Some(files), Some(folders)) = (&self.files, &self.folders) {
+      let folders_len = folders.len();
+      let files_len = files.len();
 
-impl File {
+      return match index {
+        i if i < folders_len => Some(dirs.get(&folders[i]).unwrap().clone()),
+        i if i < (files_len + folders_len) => Some(files[i - folders_len].clone()),
+        _ => None,
+      };
+    }
+    None
+  }
+
   pub fn new(path: impl AsRef<Path>) -> Self {
     let path = path.as_ref().to_path_buf();
     let metadata = get_metadata(&path);
-    let file_name = path.file_name().to_string_lossy().to_string();
+    let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+    let (files, folders) = match path.is_dir() {
+      true => {
+        let mut files = vec![];
+        let mut folders = vec![];
+        if let Ok(paths) = fs::read_dir(&path) {
+          for entry in paths {
+            let path = entry.unwrap().path();
+
+            if path.is_dir() {
+              files.push(Rc::new(Node::new(path)));
+            } else {
+              folders.push(path);
+            }
+          }
+        }
+        (Some(files), Some(folders))
+      }
+      false => (None, None),
+    };
+
     Self {
-      name: metadata.map(|m| m.title).unwrap_or(file_name),
-      metadata,
       path,
+      metadata,
+      name,
+      files,
+      folders,
     }
   }
 }
 
-impl Dir {
-  pub fn new(path: impl AsRef<Path>) -> Self {
-    let path = path.as_ref().to_path_buf();
-    let name = path
-      .file_name()
-      .unwrap_or(OsStr::new(""))
-      .to_string_lossy()
-      .to_string();
-    let mut children = vec![];
-
-    if let Ok(paths) = fs::read_dir(&path) {
-      for path in paths {
-        let path = path.unwrap().path();
-
-        if path.is_file() {
-          children.push(Node::File(File::new(&path)));
-        } else {
-          children.push(Node::Dir((path, name.clone())));
-        }
-      }
-    }
-
-    Self {
-      path,
-      children,
-      name,
-    }
+impl Display for Node {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.title())
   }
 }

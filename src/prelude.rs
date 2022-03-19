@@ -7,10 +7,12 @@ pub use std::{
   ffi::OsStr,
   fs,
   path::{Path, PathBuf},
+  rc::Rc,
   thread,
   time::Duration,
 };
 
 pub use crate::backends::Backend;
-pub use file_iter::*;
+pub use file_iter::{Library, Node};
+
 pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "flac", "wav"];
