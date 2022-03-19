@@ -193,6 +193,13 @@ impl Interface {
     }
   }
 
+  pub fn collapse(&mut self, index: usize) {
+    if let Some((node, _)) = self.library.file_list.get(index) {
+      let path = node.path().to_owned();
+      self.library.collapse(path);
+    }
+  }
+
   fn ensure_continue(&mut self) {
     if self.progress.2 == 0 || self.progress.1 != self.progress.2 || self.backend.is_paused() {
       return;

@@ -37,10 +37,14 @@ impl Library {
     self
       .open_dirs
       .insert(path.to_path_buf(), Rc::new(Node::new(path)));
+
+    self.rebuild();
   }
 
   pub fn collapse(&mut self, path: impl AsRef<Path>) {
     self.open_dirs.remove(path.as_ref());
+
+    self.rebuild();
   }
 
   pub fn rebuild(&mut self) {
@@ -71,50 +75,40 @@ impl<'a> IterablePath<'a> for &Path {
 
     DirsIter {
       dirs,
-      cursor,
-      child_index: 0,
-      depth: 0,
+      stack: vec![(cursor, 0)],
     }
   }
 }
 
 pub struct DirsIter<'a> {
   dirs: &'a OpenDirs,
-  cursor: Rc<Node>,
-  child_index: usize,
-  depth: usize,
+  stack: Vec<(Rc<Node>, usize)>,
 }
 
 impl<'a> Iterator for DirsIter<'a> {
   type Item = (Element, usize);
 
   fn next(&mut self) -> Option<Self::Item> {
-    let cursor = &self.cursor;
-    // Next file in the folder
-    if let Some(child) = cursor.child(self.child_index, &self.dirs) {
-      self.child_index += 1;
-      return Some((child, self.depth));
-    }
-    // Go up a folder, and check for next folder / file
+    let (cursor, child_index) = match self.stack.last_mut() {
+      Some(s) => s,
+      None => return None,
+    };
 
-    if self.depth > 0 {
-      self.depth -= 1;
-    } else {
-      return None;
-    }
-    match self.dirs.get(cursor.path.parent().unwrap()) {
-      None => {
-        // If none, this means we're past the root, and there is nothing else to iter through
-        return None;
-      }
-      // Recurse
-      Some(dir) => {
-        self.cursor = dir.clone();
-        self.child_index = 0;
-        self.depth += 1;
-        return self.next();
+    if let Some(child) = cursor.child(*child_index, &self.dirs) {
+      *child_index += 1;
+      match child {
+        Element::Node(node) if node.is_dir() => {
+          self.stack.push((node.clone(), 0));
+          return Some((Element::Node(node), self.stack.len() - 1));
+        }
+        _ => {
+          return Some((child, self.stack.len()));
+        }
       }
     }
+
+    self.stack.pop();
+    self.next()
   }
 }
 
@@ -125,7 +119,6 @@ pub struct Node {
   pub files: Option<Vec<Rc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
-  expanded: bool,
 }
 
 pub enum Element {
@@ -201,7 +194,6 @@ impl Node {
       name,
       files,
       folders,
-      expanded: true,
     }
   }
 }
@@ -267,7 +259,9 @@ mod tests {
 
     let folder_count = library.root.folders.as_ref().unwrap().len();
     let file_count = library.root.files.as_ref().unwrap().len();
-    // println!("len: {:?}", library.root.folders);
     assert_eq!(library.file_list.len(), folder_count + file_count);
+
+    library.expand(Path::new(&home).join("Music").join("Dozer"));
+    library.rebuild();
   }
 }

@@ -100,7 +100,7 @@ pub fn handle_input<'a>(
     }
     Key::Left | Key::Ctrl('b') => {
       if let Some(i) = list_state.selected() {
-        state.expand(i + state.list_offset);
+        state.collapse(i + state.list_offset);
       }
     }
     Key::Char('f') => {
