@@ -178,14 +178,28 @@ impl Node {
             let path = entry.unwrap().path();
 
             if path.is_dir() {
-              folders.push(path);
+              // better filtering in the future, for now remove the obvious junk
+              if let Some(name) = path.file_name() {
+                if let Some(name) = name.to_str() {
+                  if name.chars().nth(0) != Some('.') {
+                    folders.push(path);
+                  }
+                }
+              }
             } else {
-              files.push(Rc::new(Node::new(path)));
+              // filter out bad files
+              if let Some(ext) = path.extension() {
+                if let Some(ext) = ext.to_str() {
+                  if SUPPORTED.contains(&ext) {
+                    files.push(Rc::new(Node::new(path)));
+                  }
+                }
+              }
             }
           }
         }
 
-        files.sort_by(|a, b| a.title().partial_cmp(b.title()).unwrap());
+        files.sort_by(|a, b| a.path.partial_cmp(&b.path).unwrap());
         folders.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         (Some(files), Some(folders))
