@@ -37,6 +37,10 @@ impl Library {
       .insert(path.to_path_buf(), Rc::new(Node::new(path)));
   }
 
+  pub fn root_node(&self) -> &Rc<Node> {
+    self.open_dirs.get(&self.root).unwrap()
+  }
+
   pub fn collapse(&mut self, path: impl AsRef<Path>) {
     self.open_dirs.remove(path.as_ref());
   }

@@ -21,7 +21,7 @@ pub fn render_file_list<'a>(
     .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();
 
-  let mut title = "hello".to_owned();
+  let mut title = state.library.root_node().title().to_owned();
   title.push_str(&" ".repeat(area.width as usize - title.len()));
 
   let list = List::new(list_items)
