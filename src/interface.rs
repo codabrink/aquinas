@@ -102,7 +102,7 @@ impl Interface {
 
   pub fn set_root(&mut self, path: &Path) {
     let mut library = Library::new(path);
-    for (path, _) in &self.library.open_dirs {
+    for path in &self.library.open_dirs {
       if path.starts_with(&library.root.path) {
         library.expand(path);
       }
@@ -177,7 +177,7 @@ impl Interface {
     match self.library.file_list.get(index) {
       Some((node, _)) => {
         if node.is_file() {
-          self.backend.play(&node.path());
+          self.backend.play(&node.path);
           return;
         }
         self.expand(index);
@@ -191,14 +191,14 @@ impl Interface {
 
   pub fn expand(&mut self, index: usize) {
     if let Some((node, _)) = self.library.file_list.get(index) {
-      let path = node.path().to_owned();
+      let path = node.path.clone();
       self.library.expand(path);
     }
   }
 
   pub fn collapse(&mut self, index: usize) {
     if let Some((node, _)) = self.library.file_list.get(index) {
-      let path = node.path().to_owned();
+      let path = node.path.clone();
       self.library.collapse(path);
     }
   }

@@ -6,26 +6,42 @@ use crate::{
   prelude::*,
 };
 
-type OpenDirs = HashMap<PathBuf, Rc<Node>>;
-type FileList = Vec<(Element, usize)>;
+type OpenDirs = HashSet<PathBuf>;
+type Dirs = HashMap<PathBuf, Rc<Node>>;
+type FileList = Vec<(Rc<Node>, usize)>;
+
+enum MaybeNode {
+  Node(Rc<Node>),
+  Path(PathBuf),
+}
 
 pub struct Library {
   pub root: Rc<Node>,
+  pub dirs: Dirs,
   pub open_dirs: OpenDirs,
   pub file_list: FileList,
 }
 
 impl Library {
   pub fn new(root: impl AsRef<Path>) -> Self {
-    let root = Rc::new(Node::new(root));
-    let mut open_dirs = HashMap::new();
-    open_dirs.insert(root.path.clone(), root.clone());
-
-    Self {
-      root,
-      open_dirs,
-      file_list: vec![],
+    let mut dirs = HashMap::new();
+    let root = Node::new(root);
+    dirs.insert(root.path.clone(), root.clone());
+    let nodes: Vec<(Rc<Node>, usize)> = root.path.as_path().to_iter(&dirs, None).collect();
+    for (node, _) in nodes {
+      dirs.insert(node.path.clone(), node);
     }
+
+    let mut library = Self {
+      root: root.clone(),
+      dirs,
+      open_dirs: HashSet::new(),
+      file_list: vec![],
+    };
+
+    library.open_dirs.insert(root.path.clone());
+
+    library
   }
 
   pub fn expand(&mut self, path: impl AsRef<Path>) {
@@ -34,9 +50,7 @@ impl Library {
       return;
     }
 
-    self
-      .open_dirs
-      .insert(path.to_path_buf(), Rc::new(Node::new(path)));
+    self.open_dirs.insert(path.to_path_buf());
 
     self.rebuild();
   }
@@ -52,41 +66,42 @@ impl Library {
       .root
       .path
       .as_path()
-      .to_iter(&mut self.open_dirs)
+      .to_iter(&self.dirs, Some(&self.open_dirs))
       .collect();
   }
 }
 
+pub struct DirsIter<'a> {
+  dirs: &'a Dirs,
+  open_dirs: Option<&'a OpenDirs>,
+  stack: Vec<(Rc<Node>, usize)>,
+}
+
 pub trait IterablePath<'a> {
-  fn to_iter(&'a self, dirs: &'a OpenDirs) -> DirsIter<'a>;
+  fn to_iter(&'a self, dirs: &'a Dirs, open_dirs: Option<&'a OpenDirs>) -> DirsIter<'a>;
 }
 impl<'a> IterablePath<'a> for &Path {
-  fn to_iter(&self, dirs: &'a OpenDirs) -> DirsIter<'a> {
+  fn to_iter(&self, dirs: &'a Dirs, open_dirs: Option<&'a OpenDirs>) -> DirsIter<'a> {
     let start_path = match self.is_dir() {
       true => self,
       false => self.parent().unwrap(),
     };
 
-    let cursor = match dirs.get(start_path) {
-      Some(d) => d,
-      None => panic!("Bug: open dirs should contain the iterating path."),
+    let mut stack = vec![];
+    if let Some(cursor) = dirs.get(start_path) {
+      stack.push((cursor.clone(), 0));
     }
-    .clone();
 
     DirsIter {
       dirs,
-      stack: vec![(cursor, 0)],
+      open_dirs,
+      stack,
     }
   }
 }
 
-pub struct DirsIter<'a> {
-  dirs: &'a OpenDirs,
-  stack: Vec<(Rc<Node>, usize)>,
-}
-
 impl<'a> Iterator for DirsIter<'a> {
-  type Item = (Element, usize);
+  type Item = (Rc<Node>, usize);
 
   fn next(&mut self) -> Option<Self::Item> {
     let (cursor, child_index) = match self.stack.last_mut() {
@@ -94,15 +109,22 @@ impl<'a> Iterator for DirsIter<'a> {
       None => return None,
     };
 
-    if let Some(child) = cursor.child(*child_index, &self.dirs) {
+    if let Some(child) = cursor.child(*child_index, self.dirs) {
       *child_index += 1;
-      return match child {
-        Element::Node(node) if node.is_dir() => {
-          self.stack.push((node.clone(), 0));
-          Some((Element::Node(node), self.stack.len() - 1))
-        }
-        _ => Some((child, self.stack.len())),
+      let child = match child {
+        MaybeNode::Path(p) => match self.dirs.get(&p) {
+          Some(node) => node.clone(),
+          _ => Node::new(p),
+        },
+        MaybeNode::Node(n) => n,
       };
+
+      if self.open_dirs.is_none() || self.open_dirs.unwrap().contains(&child.path) {
+        self.stack.push((child.clone(), 0));
+        return Some((child, self.stack.len() - 1));
+      }
+
+      return Some((child, self.stack.len()));
     }
 
     self.stack.pop();
@@ -117,11 +139,6 @@ pub struct Node {
   pub files: Option<Vec<Rc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
-}
-
-pub enum Element {
-  Node(Rc<Node>),
-  Path(PathBuf, String),
 }
 
 impl Node {
@@ -140,28 +157,24 @@ impl Node {
     &self.name
   }
 
-  pub fn child(&self, index: usize, dirs: &OpenDirs) -> Option<Element> {
+  fn child(&self, index: usize, dirs: &Dirs) -> Option<MaybeNode> {
     if let (Some(files), Some(folders)) = (&self.files, &self.folders) {
       let folders_len = folders.len();
       let files_len = files.len();
 
       return match index {
         i if i < folders_len => match dirs.get(&folders[i]) {
-          Some(node) => Some(Element::Node(node.clone())),
-          None => {
-            let path = folders[i].to_path_buf();
-            let name = path.file_name().unwrap().to_string_lossy().to_string();
-            Some(Element::Path(path, name))
-          }
+          Some(node) => Some(MaybeNode::Node(node.clone())),
+          None => Some(MaybeNode::Path(folders[i].clone())),
         },
-        i if i < (files_len + folders_len) => Some(Element::Node(files[i - folders_len].clone())),
+        i if i < (files_len + folders_len) => Some(MaybeNode::Node(files[i - folders_len].clone())),
         _ => None,
       };
     }
     None
   }
 
-  pub fn new(path: impl AsRef<Path>) -> Self {
+  pub fn new(path: impl AsRef<Path>) -> Rc<Self> {
     let path = path.as_ref().to_path_buf();
     let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
@@ -180,7 +193,7 @@ impl Node {
               if let Some(name) = path.file_name() {
                 if let Some(name) = name.to_str() {
                   if name.chars().nth(0) != Some('.') {
-                    folders.push(path);
+                    folders.push(path.clone());
                   }
                 }
               }
@@ -189,7 +202,7 @@ impl Node {
               if let Some(ext) = path.extension() {
                 if let Some(ext) = ext.to_str() {
                   if SUPPORTED.contains(&ext) {
-                    files.push(Rc::new(Node::new(path)));
+                    files.push(Node::new(path));
                   }
                 }
               }
@@ -205,52 +218,13 @@ impl Node {
       false => (None, None),
     };
 
-    Self {
+    Rc::new(Self {
       path,
       metadata,
       name,
       files,
       folders,
-    }
-  }
-}
-
-impl Display for Element {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      Self::Node(node) => write!(f, "{}", node),
-      Self::Path(_, name) => write!(f, "{}", name),
-    }
-  }
-}
-
-impl Element {
-  pub fn path(&self) -> &Path {
-    match self {
-      Self::Node(node) => &node.path,
-      Self::Path(path, _) => &path,
-    }
-  }
-
-  pub fn is_file(&self) -> bool {
-    match self {
-      Self::Node(node) => node.is_file(),
-      Self::Path(path, _) => path.is_file(),
-    }
-  }
-
-  pub fn is_dir(&self) -> bool {
-    match self {
-      Self::Node(node) => node.is_dir(),
-      Self::Path(path, _) => path.is_dir(),
-    }
-  }
-
-  pub fn title(&self) -> &str {
-    match self {
-      Self::Node(node) => node.title(),
-      Self::Path(_, name) => name,
-    }
+    })
   }
 }
 

@@ -46,11 +46,11 @@ pub fn render_file_list<'a>(
   frame.render_stateful_widget(list, area, list_state);
 }
 
-fn render_list_item<'a>(state: &'a Interface, node: &'a Element, depth: usize) -> ListItem<'a> {
+fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> ListItem<'a> {
   ListItem::new(match (node.is_dir(), state.backend.last_played()) {
     (true, _) => Spans::from(vec![
       Span::from(" ".repeat(depth * 2)),
-      Span::from(match state.library.open_dirs.contains_key(node.path()) {
+      Span::from(match state.library.open_dirs.contains(&node.path) {
         true => "▼ ",
         false => "▶ ",
       }),
@@ -61,7 +61,7 @@ fn render_list_item<'a>(state: &'a Interface, node: &'a Element, depth: usize) -
           .add_modifier(Modifier::BOLD),
       ),
     ]),
-    (false, Some(lp)) if *lp == node.path() => Spans::from(vec![Span::styled(
+    (false, Some(lp)) if *lp == node.path => Spans::from(vec![Span::styled(
       format!("{}{}", " ".repeat(depth * 2), node.title()),
       Style::default().bg(Color::White).fg(Color::Black),
     )]),

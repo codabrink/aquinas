@@ -13,6 +13,6 @@ pub use std::{
 };
 
 pub use crate::backends::Backend;
-pub use file_iter::{Element, Library, Node};
+pub use file_iter::{Library, Node};
 
-pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "flac", "wav"];
+pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "opus", "flac", "wav"];
