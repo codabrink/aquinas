@@ -178,9 +178,7 @@ impl Interface {
             list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
           }
           _ => match self.focus {
-            Focusable::FileList => {
-              file_list::handle_input(self, &mut list_state, key, height as usize)
-            }
+            Focusable::FileList => file_list::handle_input(self, &mut list_state, key),
             Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
           },
         },

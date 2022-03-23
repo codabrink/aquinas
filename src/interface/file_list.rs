@@ -72,12 +72,7 @@ fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> L
   })
 }
 
-pub fn handle_input<'a>(
-  state: &'a mut Interface,
-  list_state: &mut ListState,
-  key: Key,
-  height: usize,
-) {
+pub fn handle_input<'a>(state: &'a mut Interface, list_state: &mut ListState, key: Key) {
   match key {
     Key::Right | Key::Ctrl('f') => {
       if let Some(i) = list_state.selected() {

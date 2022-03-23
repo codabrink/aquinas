@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{collections::BTreeSet, fmt::Display};
+use std::fmt::Display;
 
 use crate::{
   metadata::{get_metadata, Metadata},
