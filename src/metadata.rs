@@ -3,7 +3,7 @@ use audiotags::Tag;
 use lewton::inside_ogg::OggStreamReader;
 use std::fs;
 
-#[derive(PartialEq, Default, Clone, Debug)]
+#[derive(PartialEq, Default, Clone, Debug, PartialOrd, Eq, Ord)]
 pub struct Metadata {
   pub title: Option<String>,
   pub artist: Option<String>,

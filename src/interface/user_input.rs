@@ -35,6 +35,10 @@ pub fn handle_input<'a>(state: &'a mut Interface, key: Key) {
     Key::Esc => state.focus = Focusable::FileList,
     _ => {}
   }
+
+  if state.focus == Focusable::Search {
+    state.library.search(&state.input);
+  }
 }
 
 pub fn process_cmd<'a>(state: &'a mut Interface) {
@@ -59,6 +63,12 @@ pub fn process_cmd<'a>(state: &'a mut Interface) {
 
       if path.is_dir() {
         state.set_root(&path);
+      }
+    }
+    Focusable::Search => {
+      if let Some(node) = state.highlighted() {
+        state.library.search("");
+        state.play_path(&node.path);
       }
     }
     _ => {}
