@@ -1,28 +1,28 @@
+use crate::*;
 use core::fmt;
 use std::fmt::Display;
-
-use crate::{
-  metadata::{get_metadata, Metadata},
-  prelude::*,
-};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread;
+use tokio::task;
 
 type OpenDirs = HashSet<PathBuf>;
-type Dirs = HashMap<PathBuf, Rc<Node>>;
-type FileList = Vec<(Rc<Node>, usize)>;
+type Dirs = HashMap<PathBuf, Arc<Node>>;
+type FileList = Vec<(Arc<Node>, usize)>;
 
 enum MaybeNode {
-  Node(Rc<Node>),
+  Node(Arc<Node>),
   Path(PathBuf),
 }
 
 pub struct Library {
-  pub root: Rc<Node>,
+  pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
-  pub index: Index,
-  pub query: String,
+  index: Option<Index>,
+  query: String,
   file_list: FileList,
   empty_list: FileList,
+  index_rx: Receiver<Index>,
 }
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ impl Index {
     }
   }
 
-  pub fn index(&mut self, key: impl AsRef<str>, node: &Rc<Node>) {
+  pub fn index(&mut self, key: impl AsRef<str>, node: &Arc<Node>) {
     let chars: Vec<char> = key.as_ref().to_lowercase().chars().collect();
     for i in 0..chars.len() {
       let mut index = &mut *self;
@@ -58,41 +58,41 @@ impl Library {
     let root = Node::new(root);
     dirs.insert(root.path.clone(), root.clone());
 
+    let (tx, index_rx) = mpsc::channel();
     let mut library = Self {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
       file_list: vec![],
-      index: Index::new(),
+      index: None,
       query: String::new(),
       empty_list: vec![],
+      index_rx,
     };
 
     library.open_dirs.insert(root.path.clone());
-    println!("Building index...");
-    library.build_index();
-    println!("Done building index.");
+    let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
+    task::spawn(async move { Library::build_index(root.path.clone(), nodes, tx).await });
 
     library
   }
 
   pub fn file_list(&self) -> &FileList {
-    match self.query.as_str() {
-      "" => &self.file_list,
-      q => {
-        let chars: Vec<char> = q.to_lowercase().chars().collect();
-        let mut index = Some(&self.index);
-        for char in chars {
-          if let Some(_index) = index {
-            index = _index.children.get(&char);
-          }
-        }
+    if self.index.is_none() || self.query == "" {
+      return &self.file_list;
+    }
 
-        match index {
-          Some(index) => &index.nodes,
-          _ => &self.empty_list,
-        }
+    let chars: Vec<char> = self.query.chars().collect();
+    let mut index = self.index.as_ref();
+    for char in chars {
+      if let Some(_index) = index {
+        index = _index.children.get(&char);
       }
+    }
+
+    match index {
+      Some(index) => &index.nodes,
+      _ => &self.empty_list,
     }
   }
 
@@ -100,32 +100,32 @@ impl Library {
     &self.file_list
   }
 
-  pub fn build_index(&mut self) {
+  async fn build_index(root: PathBuf, file_list: FileList, sender: Sender<Index>) {
     // collect all files
-    let nodes: Vec<(Rc<Node>, usize)> =
-      self.root.path.as_path().to_iter(&self.dirs, None).collect();
 
-    for (node, _) in nodes {
+    let mut index = Index::new();
+
+    for (node, _) in file_list {
       // self.index.nodes.push((node.clone(), 0));
 
       // index the display name
-      self.index.index(format!("{}", node), &node);
+      index.index(format!("{}", node), &node);
 
       // index the folders
-      let mut path = node.path.as_path();
-      while let Some(node) = self.dirs.get(path) {
-        // if *node == self.root {
-        // break;
-        // }
+      let mut path = Some(node.path.as_path());
+      while let Some(_path) = path {
+        if _path == root {
+          break;
+        }
 
-        self.index.index(node.title(), &node);
+        let name = _path.file_name().unwrap().to_string_lossy().to_string();
+        index.index(name, &node);
 
-        path = match path.parent() {
-          Some(path) => path,
-          _ => break,
-        };
+        path = _path.parent();
       }
     }
+
+    let _ = sender.send(index);
   }
 
   pub fn expand(&mut self, path: impl AsRef<Path>) {
@@ -171,12 +171,18 @@ impl Library {
       // .to_iter(&self.dirs, None)
       .collect();
   }
+
+  pub fn update(&mut self) {
+    if let Ok(index) = self.index_rx.try_recv() {
+      self.index = Some(index);
+    }
+  }
 }
 
 pub struct DirsIter<'a> {
   dirs: &'a Dirs,
   open_dirs: Option<&'a OpenDirs>,
-  stack: Vec<(Rc<Node>, usize)>,
+  stack: FileList,
 }
 
 pub trait IterablePath<'a> {
@@ -203,7 +209,7 @@ impl<'a> IterablePath<'a> for &Path {
 }
 
 impl<'a> Iterator for DirsIter<'a> {
-  type Item = (Rc<Node>, usize);
+  type Item = (Arc<Node>, usize);
 
   fn next(&mut self) -> Option<Self::Item> {
     let (cursor, child_index) = match self.stack.last_mut() {
@@ -238,7 +244,7 @@ impl<'a> Iterator for DirsIter<'a> {
 pub struct Node {
   pub path: PathBuf,
   pub metadata: Option<Metadata>,
-  pub files: Option<Vec<Rc<Node>>>,
+  pub files: Option<Vec<Arc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
 }
@@ -276,7 +282,7 @@ impl Node {
     None
   }
 
-  pub fn new(path: impl AsRef<Path>) -> Rc<Self> {
+  pub fn new(path: impl AsRef<Path>) -> Arc<Self> {
     let path = path.as_ref().to_path_buf();
     let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
@@ -320,7 +326,7 @@ impl Node {
       false => (None, None),
     };
 
-    Rc::new(Self {
+    Arc::new(Self {
       path,
       metadata,
       name,
@@ -353,22 +359,6 @@ mod tests {
     let folder_count = library.root.folders.as_ref().unwrap().len();
     let file_count = library.root.files.as_ref().unwrap().len();
     assert_eq!(library.file_list.len(), folder_count + file_count);
-
-    println!(
-      "{:?}",
-      library
-        .index
-        .children
-        .get(&'a')
-        .unwrap()
-        .children
-        .get(&'a')
-        .unwrap()
-        .children
-        .keys()
-    );
-
-    assert!(library.index.children.len() > 10);
 
     // library.expand(Path::new(&home).join("Music").join("Dozer"));
     // library.rebuild();

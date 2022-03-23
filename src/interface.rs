@@ -47,7 +47,7 @@ pub struct Interface {
   pub input: String,
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
-  pub playing: Option<Rc<Node>>,
+  pub playing: Option<Arc<Node>>,
   pub play_index: usize,
 }
 
@@ -155,6 +155,7 @@ impl Interface {
       })?;
 
       self.ensure_continue();
+      self.library.update();
 
       match self.evt_rx.recv()? {
         Event::Input(key) => match key {
@@ -187,7 +188,7 @@ impl Interface {
     }
   }
 
-  pub fn highlighted(&mut self) -> Option<Rc<Node>> {
+  pub fn highlighted(&mut self) -> Option<Arc<Node>> {
     self
       .library
       .file_list()

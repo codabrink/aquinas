@@ -5,6 +5,7 @@ pub use std::{
   fs,
   path::{Path, PathBuf},
   rc::Rc,
+  sync::Arc,
   thread,
   time::Duration,
 };
