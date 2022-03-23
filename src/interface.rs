@@ -2,7 +2,7 @@ mod file_list;
 mod player_state;
 mod user_input;
 
-use crate::{backends, prelude::*};
+use crate::*;
 use anyhow::Result;
 use crossbeam_channel::{unbounded, Receiver};
 use std::{
@@ -30,6 +30,8 @@ enum Event {
   Input(Key),
   Tick,
 }
+
+#[derive(PartialEq)]
 pub enum Focusable {
   FileList,
   Dir,
@@ -156,9 +158,24 @@ impl Interface {
 
       match self.evt_rx.recv()? {
         Event::Input(key) => match key {
-          Key::Char('q') | Key::Esc => {
+          Key::Ctrl('q') | Key::Esc => {
             drop(terminal);
             std::process::exit(0);
+          }
+          Key::Down | Key::Ctrl('n') => {
+            self.list_index =
+              (self.list_index + 1).min(self.library.file_list().len().saturating_sub(1));
+            self.list_offset = self.list_offset.max(
+              self
+                .list_index
+                .saturating_sub(height.saturating_sub(3) as usize),
+            );
+            list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
+          }
+          Key::Up | Key::Ctrl('p') => {
+            self.list_index = self.list_index.saturating_sub(1);
+            self.list_offset = self.list_offset.min(self.list_index);
+            list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
           }
           _ => match self.focus {
             Focusable::FileList => {
@@ -172,9 +189,17 @@ impl Interface {
     }
   }
 
+  pub fn highlighted(&mut self) -> Option<Rc<Node>> {
+    self
+      .library
+      .file_list()
+      .get(self.list_index + self.list_offset)
+      .map(|(n, _)| n.clone())
+  }
+
   pub fn play(&mut self, index: usize) {
     self.play_index = index;
-    match self.library.file_list.get(index) {
+    match self.library.full_file_list().get(index) {
       Some((node, _)) => {
         if node.is_file() {
           self.backend.play(&node.path);
@@ -189,15 +214,45 @@ impl Interface {
     }
   }
 
+  pub fn play_path(&mut self, path: impl AsRef<Path>) {
+    let path = path.as_ref();
+    if !path.starts_with(&self.library.root.path) {
+      // current root does not contain path
+      return;
+    }
+
+    // expand the path and it's parents
+    let mut bubble = path;
+    let mut bubble_paths = vec![path];
+
+    while bubble != self.library.root.path {
+      bubble_paths.push(bubble);
+      bubble = match bubble.parent() {
+        Some(p) => p,
+        _ => break,
+      };
+    }
+    self.library.expand_all(&bubble_paths);
+
+    let index = self
+      .library
+      .full_file_list()
+      .iter()
+      .position(|(n, _)| n.path == path);
+    if let Some(index) = index {
+      self.play(index);
+    }
+  }
+
   pub fn expand(&mut self, index: usize) {
-    if let Some((node, _)) = self.library.file_list.get(index) {
+    if let Some((node, _)) = self.library.file_list().get(index) {
       let path = node.path.clone();
       self.library.expand(path);
     }
   }
 
   pub fn collapse(&mut self, index: usize) {
-    if let Some((node, _)) = self.library.file_list.get(index) {
+    if let Some((node, _)) = self.library.file_list().get(index) {
       let path = node.path.clone();
       self.library.collapse(path);
     }

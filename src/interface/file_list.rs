@@ -14,8 +14,8 @@ pub fn render_file_list<'a>(
   area: Rect,
   frame: &mut Frame,
 ) {
-  let list_items: Vec<ListItem> = state.library.file_list[state.list_offset
-    ..(state.list_offset + area.height as usize).min(state.library.file_list.len())]
+  let list_items: Vec<ListItem> = state.library.file_list()[state.list_offset
+    ..(state.list_offset + area.height as usize).min(state.library.file_list().len())]
     .into_iter()
     .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();
@@ -79,19 +79,6 @@ pub fn handle_input<'a>(
   height: usize,
 ) {
   match key {
-    Key::Down | Key::Ctrl('n') => {
-      state.list_index =
-        (state.list_index + 1).min(state.library.file_list.len().saturating_sub(1));
-      state.list_offset = state
-        .list_offset
-        .max(state.list_index.saturating_sub(height.saturating_sub(3)));
-      list_state.select(Some(state.list_index.saturating_sub(state.list_offset)));
-    }
-    Key::Up | Key::Ctrl('p') => {
-      state.list_index = state.list_index.saturating_sub(1);
-      state.list_offset = state.list_offset.min(state.list_index);
-      list_state.select(Some(state.list_index.saturating_sub(state.list_offset)));
-    }
     Key::Right | Key::Ctrl('f') => {
       if let Some(i) = list_state.selected() {
         state.expand(i + state.list_offset);
@@ -117,9 +104,6 @@ pub fn handle_input<'a>(
     }
     Key::Char('\n') => {
       state.play(state.list_index);
-      // if let Some(root) = &state.root {
-      // state.backend.tags(&root.path);
-      // }
     }
     Key::Char(' ') => state.backend.toggle(),
     Key::Char('d') => state.focus = Focusable::Dir,
