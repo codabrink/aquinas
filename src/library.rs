@@ -1,5 +1,6 @@
 use crate::*;
 use core::fmt;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -18,38 +19,11 @@ pub struct Library {
   pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
-  index: Option<Index>,
+  shallow_list: FileList,
+
+  list: FileList,
+  masked_list: FileList,
   query: String,
-  file_list: FileList,
-  empty_list: FileList,
-  index_rx: Receiver<Index>,
-}
-
-#[derive(Debug)]
-pub struct Index {
-  nodes: FileList,
-  children: HashMap<char, Index>,
-}
-
-impl Index {
-  pub fn new() -> Self {
-    Self {
-      nodes: vec![],
-      children: HashMap::new(),
-    }
-  }
-
-  pub fn index(&mut self, key: impl AsRef<str>, node: &Arc<Node>) {
-    let chars: Vec<char> = key.as_ref().to_lowercase().chars().collect();
-    for i in 0..chars.len() {
-      let mut index = &mut *self;
-
-      for ii in i..chars.len() {
-        index = index.children.entry(chars[ii]).or_insert(Index::new());
-        index.nodes.push((node.clone(), 0));
-      }
-    }
-  }
 }
 
 impl Library {
@@ -58,74 +32,31 @@ impl Library {
     let root = Node::new(root);
     dirs.insert(root.path.clone(), root.clone());
 
-    let (tx, index_rx) = mpsc::channel();
     let mut library = Self {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
-      file_list: vec![],
-      index: None,
+      shallow_list: Vec::new(),
       query: String::new(),
-      empty_list: vec![],
-      index_rx,
+      list: Vec::new(),
+      masked_list: Vec::new(),
     };
 
     library.open_dirs.insert(root.path.clone());
     let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
-    task::spawn(async move { Library::build_index(root.path.clone(), nodes, tx).await });
+    // let mask_map = Library::build_index(root.path.clone(), &nodes);
+
+    library.list = nodes;
+    // library.mask_map = mask_map;
 
     library
   }
 
   pub fn file_list(&self) -> &FileList {
-    if self.index.is_none() || self.query == "" {
-      return &self.file_list;
+    match self.query.as_str() {
+      "" => &self.shallow_list,
+      _ => &self.masked_list,
     }
-
-    let chars: Vec<char> = self.query.chars().collect();
-    let mut index = self.index.as_ref();
-    for char in chars {
-      if let Some(_index) = index {
-        index = _index.children.get(&char);
-      }
-    }
-
-    match index {
-      Some(index) => &index.nodes,
-      _ => &self.empty_list,
-    }
-  }
-
-  pub fn full_file_list(&self) -> &FileList {
-    &self.file_list
-  }
-
-  async fn build_index(root: PathBuf, file_list: FileList, sender: Sender<Index>) {
-    // collect all files
-
-    let mut index = Index::new();
-
-    for (node, _) in file_list {
-      // self.index.nodes.push((node.clone(), 0));
-
-      // index the display name
-      index.index(format!("{}", node), &node);
-
-      // index the folders
-      let mut path = Some(node.path.as_path());
-      while let Some(_path) = path {
-        if _path == root {
-          break;
-        }
-
-        let name = _path.file_name().unwrap().to_string_lossy().to_string();
-        index.index(name, &node);
-
-        path = _path.parent();
-      }
-    }
-
-    let _ = sender.send(index);
   }
 
   pub fn expand(&mut self, path: impl AsRef<Path>) {
@@ -152,30 +83,27 @@ impl Library {
   }
 
   pub fn search(&mut self, query: impl AsRef<str>) {
-    self.query = query.as_ref().to_lowercase();
-    // let chars: Vec<char> = query.as_ref().to_lowercase().chars().collect();
-    // let mut index = Some(&self.index);
-    // for char in chars {
-    //   if let Some(_index) = index {
-    //     index = _index.children.get(&char);
-    //   }
-    // }
+    let query = query.as_ref();
+
+    self.masked_list = Vec::new();
+
+    for (node, i) in &self.list {
+      if node.normalized_name.contains(query) {
+        self.masked_list.push((node.clone(), *i));
+      }
+    }
+
+    self.query = query.to_owned();
   }
 
   pub fn rebuild(&mut self) {
-    self.file_list = self
+    self.shallow_list = self
       .root
       .path
       .as_path()
       .to_iter(&self.dirs, Some(&self.open_dirs))
       // .to_iter(&self.dirs, None)
       .collect();
-  }
-
-  pub fn update(&mut self) {
-    if let Ok(index) = self.index_rx.try_recv() {
-      self.index = Some(index);
-    }
   }
 }
 
@@ -247,6 +175,7 @@ pub struct Node {
   pub files: Option<Vec<Arc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
+  normalized_name: String,
 }
 
 impl Node {
@@ -329,6 +258,7 @@ impl Node {
     Arc::new(Self {
       path,
       metadata,
+      normalized_name: name.to_ascii_lowercase(),
       name,
       files,
       folders,
@@ -353,14 +283,19 @@ mod tests {
   fn exploration() {
     let home = env::var("HOME").unwrap();
 
-    let mut library = Library::new(Path::new(&home).join("Music"));
-    library.rebuild();
-
-    let folder_count = library.root.folders.as_ref().unwrap().len();
-    let file_count = library.root.files.as_ref().unwrap().len();
-    assert_eq!(library.file_list.len(), folder_count + file_count);
-
-    // library.expand(Path::new(&home).join("Music").join("Dozer"));
+    // let mut library = Library::new(Path::new(&home).join("Music"));
     // library.rebuild();
+    // let folder_count = library.root.folders.as_ref().unwrap().len();
+    // let file_count = library.root.files.as_ref().unwrap().len();
+    // assert_eq!(library.shallow_list.len(), folder_count + file_count);
+
+    let library = Library::new(
+      Path::new(&home)
+        .join("Music")
+        .join("Pendulum")
+        .join("Immersion"),
+    );
+
+    // println!("Mask: {:?}", library.mask_map);
   }
 }

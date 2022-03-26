@@ -155,7 +155,6 @@ impl Interface {
       })?;
 
       self.ensure_continue();
-      self.library.update();
 
       match self.evt_rx.recv()? {
         Event::Input(key) => match key {
@@ -198,7 +197,7 @@ impl Interface {
 
   pub fn play(&mut self, index: usize) {
     self.play_index = index;
-    match self.library.full_file_list().get(index) {
+    match self.library.file_list().get(index) {
       Some((node, _)) => {
         if node.is_file() {
           self.backend.play(&node.path);
@@ -235,7 +234,7 @@ impl Interface {
 
     let index = self
       .library
-      .full_file_list()
+      .file_list()
       .iter()
       .position(|(n, _)| n.path == path);
     if let Some(index) = index {
