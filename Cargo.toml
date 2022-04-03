@@ -15,6 +15,7 @@ tui = "0.17"
 crossbeam-channel = "0.5"
 hashbrown = "0.12"
 tokio = { version = "1.17", features = ["full"] }
+rodio = "0.15"
 
 # mp3, flac
 audiotags = "0.2"

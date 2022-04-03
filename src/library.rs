@@ -1,10 +1,6 @@
 use crate::*;
 use core::fmt;
-use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::sync::mpsc::{self, Receiver, Sender};
-use std::thread;
-use tokio::task;
 
 type OpenDirs = HashSet<PathBuf>;
 type Dirs = HashMap<PathBuf, Arc<Node>>;
@@ -19,9 +15,10 @@ pub struct Library {
   pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
+  metadata: HashMap<PathBuf, Metadata>,
   shallow_list: FileList,
-
   list: FileList,
+  index: Vec<(String, usize)>,
   masked_list: FileList,
   query: String,
 }
@@ -36,17 +33,19 @@ impl Library {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
+      metadata: HashMap::new(),
       shallow_list: Vec::new(),
       query: String::new(),
+      index: Vec::new(),
       list: Vec::new(),
       masked_list: Vec::new(),
     };
 
     library.open_dirs.insert(root.path.clone());
-    let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
+    // let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
     // let mask_map = Library::build_index(root.path.clone(), &nodes);
 
-    library.list = nodes;
+    // library.list = nodes;
     // library.mask_map = mask_map;
 
     library
@@ -86,14 +85,13 @@ impl Library {
     let query = query.as_ref();
 
     self.masked_list = Vec::new();
+    self.query = query.to_owned();
 
-    for (node, i) in &self.list {
-      if node.normalized_name.contains(query) {
-        self.masked_list.push((node.clone(), *i));
+    for (k, i) in &self.index {
+      if k.contains(query) {
+        self.masked_list.push(self.list[*i].clone());
       }
     }
-
-    self.query = query.to_owned();
   }
 
   pub fn rebuild(&mut self) {
@@ -175,7 +173,6 @@ pub struct Node {
   pub files: Option<Vec<Arc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
-  normalized_name: String,
 }
 
 impl Node {
@@ -213,6 +210,7 @@ impl Node {
 
   pub fn new(path: impl AsRef<Path>) -> Arc<Self> {
     let path = path.as_ref().to_path_buf();
+    // let metadata = None;
     let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
 
@@ -258,7 +256,6 @@ impl Node {
     Arc::new(Self {
       path,
       metadata,
-      normalized_name: name.to_ascii_lowercase(),
       name,
       files,
       folders,

@@ -49,8 +49,8 @@ impl super::Backend for GStreamer {
       last_played: None,
     }
   }
-  fn last_played(&self) -> &Option<PathBuf> {
-    &self.last_played
+  fn last_played(&self) -> Option<&PathBuf> {
+    self.last_played.as_ref()
   }
 
   fn duration(path: &Path) -> u64 {
@@ -65,21 +65,20 @@ impl super::Backend for GStreamer {
     0
   }
 
-  fn tags(&self, path: &Path) -> Vec<String> {
-    let timeout = ClockTime::from_seconds(1);
-    let mut result = vec![];
-    if let Ok(discoverer) = gst_pbutils::Discoverer::new(timeout) {
-      if let Ok(info) = discoverer.discover_uri(&format!("file:///{}", path.display())) {
-        if let Some(t) = info.tags() {
-          for (name, _) in t.iter() {
-            result.push(name.to_owned());
-          }
-        }
-      }
-    }
-    // std::fs::write("check", result.join(","));
-    result
-  }
+  // fn tags(&self, path: &Path) -> Vec<String> {
+  // let timeout = ClockTime::from_seconds(1);
+  // let mut result = vec![];
+  // if let Ok(discoverer) = gst_pbutils::Discoverer::new(timeout) {
+  // if let Ok(info) = discoverer.discover_uri(&format!("file:///{}", path.display())) {
+  // if let Some(t) = info.tags() {
+  // for (name, _) in t.iter() {
+  // result.push(name.to_owned());
+  // }
+  // }
+  // }
+  // }
+  // result
+  // }
 
   fn play(&mut self, path: &Path) {
     self

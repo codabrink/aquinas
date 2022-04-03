@@ -12,6 +12,9 @@ pub struct Metadata {
 }
 
 pub fn get_metadata(path: &Path) -> Option<Metadata> {
+  if path.is_dir() {
+    return None;
+  }
   match path.extension() {
     Some(ext) => {
       let ext = ext.to_string_lossy().to_lowercase();
