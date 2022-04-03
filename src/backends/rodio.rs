@@ -9,6 +9,7 @@ use std::sync::{atomic::AtomicBool, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub struct Rodio {
+  _stream: OutputStream,
   stream: OutputStreamHandle,
   // playing: Option<Stoppable<Decoder<BufReader<File>>>>,
   playing: Option<PathBuf>,
@@ -36,11 +37,12 @@ impl Rodio {
 
 impl super::Backend for Rodio {
   fn new() -> Self {
-    let (_stream, stream_handle) = OutputStream::try_default().unwrap();
+    let (stream, stream_handle) = OutputStream::try_default().unwrap();
     Self {
+      _stream: stream,
+      stream: stream_handle,
       playing: None,
       playing_duration: 0,
-      stream: stream_handle,
       controls: Arc::new(Controls::default()),
     }
   }
@@ -58,6 +60,7 @@ impl super::Backend for Rodio {
     if let Some(source) = Self::create_source(path) {
       self.playing = Some(path.to_path_buf());
       let controls = self.controls.clone();
+      let seek = self.controls.seek.swap(0, Ordering::SeqCst);
 
       let source =
         source
@@ -80,7 +83,6 @@ impl super::Backend for Rodio {
             };
           });
 
-      let seek = self.controls.seek.swap(0, Ordering::SeqCst);
       let samples = source
         .skip_duration(Duration::from_secs(seek))
         .convert_samples();
@@ -88,6 +90,7 @@ impl super::Backend for Rodio {
       *self.controls.playing_since.lock().unwrap() = Some(Instant::now());
       *self.controls.cursor.lock().unwrap() = Duration::from_secs(seek);
       self.playing_duration = Self::duration(path);
+
       let _ = self.stream.play_raw(samples);
     }
   }
@@ -122,6 +125,7 @@ impl super::Backend for Rodio {
   }
 
   fn progress(&self) -> (f64, u64, u64) {
+    return (0., 0, 0);
     let time_pos = self.controls.cursor.lock().unwrap().clone();
     let time_pos = match &*self.controls.playing_since.lock().unwrap() {
       Some(ps) => time_pos + ps.elapsed(),
