@@ -210,8 +210,8 @@ impl Node {
 
   pub fn new(path: impl AsRef<Path>) -> Arc<Self> {
     let path = path.as_ref().to_path_buf();
-    // let metadata = None;
-    let metadata = get_metadata(&path);
+    let metadata = None;
+    // let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
 
     let (files, folders) = match path.is_dir() {

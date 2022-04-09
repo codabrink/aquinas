@@ -1,17 +1,15 @@
-use rodio::source::Stoppable;
-use rodio::{Decoder, OutputStream, Sink, Source};
-use rodio::{OutputStreamHandle, Sample};
+use rodio::OutputStreamHandle;
+use rodio::{Decoder, OutputStream, Source};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicIsize, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 pub struct Rodio {
   _stream: OutputStream,
   stream: OutputStreamHandle,
-  // playing: Option<Stoppable<Decoder<BufReader<File>>>>,
   playing: Option<PathBuf>,
   playing_duration: u64,
   controls: Arc<Controls>,
@@ -24,6 +22,7 @@ struct Controls {
 
   playing_since: Mutex<Option<Instant>>,
   cursor: Mutex<Duration>,
+  playing_index: AtomicUsize,
 }
 
 impl Rodio {
@@ -62,11 +61,17 @@ impl super::Backend for Rodio {
       let controls = self.controls.clone();
       let seek = self.controls.seek.swap(0, Ordering::SeqCst);
 
+      let playing_index = controls.playing_index.fetch_add(1, Ordering::SeqCst) + 1;
+
       let source =
         source
           .pausable(false)
           .stoppable()
           .periodic_access(Duration::from_millis(5), move |src| {
+            if playing_index != controls.playing_index.load(Ordering::SeqCst) {
+              src.stop();
+            }
+
             let paused = controls.paused.load(Ordering::SeqCst);
             src.inner_mut().set_paused(paused);
 
@@ -125,16 +130,30 @@ impl super::Backend for Rodio {
   }
 
   fn progress(&self) -> (f64, u64, u64) {
-    return (0., 0, 0);
-    let time_pos = self.controls.cursor.lock().unwrap().clone();
-    let time_pos = match &*self.controls.playing_since.lock().unwrap() {
-      Some(ps) => time_pos + ps.elapsed(),
-      None => time_pos,
+    // return (0., 0, 0);
+    let mut time_pos = self.controls.cursor.lock().unwrap().as_secs();
+    let playing_since = self.controls.playing_since.lock().unwrap();
+
+    if let Some(playing_since) = &*self.controls.playing_since.lock().unwrap() {
+      time_pos += playing_since.elapsed().as_secs();
     }
-    .as_secs();
 
     let duration = self.playing_duration;
     let percent = time_pos as f64 / (duration as f64);
     (percent, time_pos, duration)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::backends::rodio::*;
+  use crate::*;
+  #[test]
+  fn test_duration() {
+    let path = Path::new("assets/brighter.ogg");
+
+    assert!(path.is_file());
+    let dur = Rodio::duration(path);
+    assert!(dur > 0);
   }
 }

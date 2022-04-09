@@ -23,10 +23,4 @@ audiotags = "0.2"
 opus_headers = "0.1"
 # ogg
 lewton = "0.10"
-
-[dev-dependencies]
-criterion = "0.3"
-
-[[bench]]
-name = "aquinas_benches"
-harness = false
+ogg_metadata = "0.4.1"
