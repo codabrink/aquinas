@@ -1,4 +1,6 @@
-Under development. Basic functionality works. I use this personally. Will add search soon.
+This is a little media player written for myself.
+
+I really wish I had the time to make this something that I'm proud of, rather than the mess it is today. But for me, this is "good enough" for me for now and serves its purposes.
 
 # Aquinas Media Player
 
