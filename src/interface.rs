@@ -4,17 +4,16 @@ mod user_input;
 
 use crate::*;
 use anyhow::Result;
+use crossterm::{
+  event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
+  execute,
+  terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
 use std::{
   boxed::Box,
   io,
   path::Path,
   time::{Duration, Instant},
-};
-
-use crossterm::{
-  event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
-  execute,
-  terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use tui::{
   backend::{Backend, CrosstermBackend},
@@ -23,8 +22,6 @@ use tui::{
   Terminal,
 };
 
-// pub type Frame<'a> = tui::Frame<'a, CrosstermBackend<Backend>>;
-
 #[derive(PartialEq)]
 pub enum Focusable {
   FileList,
@@ -32,11 +29,13 @@ pub enum Focusable {
   Search,
 }
 
-pub struct Interface {
+pub struct App {
   pub backend: Box<dyn AudioBackend>,
   pub library: Library,
+  pub list_state: ListState,
   pub list_index: usize,
   pub list_offset: usize,
+  pub height: i32,
   pub input: String,
   pub focus: Focusable,
   pub progress: (f64, u64, u64),
@@ -44,16 +43,18 @@ pub struct Interface {
   pub play_index: usize,
 }
 
-impl Interface {
+impl App {
   pub fn new() -> Self {
     let path = std::env::current_dir().expect("Could not get current dir.");
     let backend = backends::load();
     let progress = backend.progress();
 
-    let mut interface = Self {
+    let mut app = Self {
       backend,
       library: Library::new(&path),
       playing: None,
+      height: 0,
+      list_state: ListState::default(),
       list_index: 0,
       list_offset: 0,
       focus: Focusable::FileList,
@@ -61,16 +62,16 @@ impl Interface {
       progress,
       play_index: 0,
     };
-    interface.set_root(&path);
+    app.set_root(&path);
 
     // Development code
-    interface.focus = Focusable::Dir;
-    interface.input = "~/Music".to_owned();
-    user_input::process_cmd(&mut interface);
+    app.focus = Focusable::Dir;
+    app.input = "~/Music".to_owned();
+    user_input::process_cmd(&mut app);
 
-    interface.library.rebuild();
+    app.library.rebuild();
 
-    interface
+    app
   }
 
   pub fn set_root(&mut self, path: &Path) {
@@ -91,7 +92,6 @@ impl Interface {
     let mut terminal = Terminal::new(backend)?;
 
     let mut list_state = ListState::default();
-    let mut height = 0;
 
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
@@ -139,17 +139,21 @@ impl Interface {
         self.list_offset = self.list_offset.max(
           self
             .list_index
-            .saturating_sub(height.saturating_sub(3) as usize),
+            .saturating_sub(self.height.saturating_sub(3) as usize),
         );
-        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
+        self
+          .list_state
+          .select(Some(self.list_index.saturating_sub(self.list_offset)));
       }
       KeyCode::Up | KeyCode::Char('p') if ctrl => {
         self.list_index = self.list_index.saturating_sub(1);
         self.list_offset = self.list_offset.min(self.list_index);
-        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
+        self
+          .list_state
+          .select(Some(self.list_index.saturating_sub(self.list_offset)));
       }
       _ => match self.focus {
-        Focusable::FileList => file_list::handle_input(self, &mut list_state, key),
+        Focusable::FileList => file_list::handle_input(self, &mut self.list_state, key),
         Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
       },
     }
@@ -159,7 +163,7 @@ impl Interface {
 
   fn draw<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
     terminal.draw(|f| {
-      let height = f.size().height;
+      self.height = f.size().height as i32;
 
       let v_constraints = match self.focus {
         Focusable::Dir | Focusable::Search => {
@@ -184,7 +188,7 @@ impl Interface {
         _ => {}
       }
 
-      file_list::render_file_list(self, &mut list_state, chunks[chunks.len() - 2], f);
+      file_list::render_file_list(self, chunks[chunks.len() - 2], f);
       player_state::render(self, &chunks.last().unwrap(), f);
     })?;
 

@@ -9,12 +9,7 @@ use tui::{
   widgets::{Block, Borders, ListItem, ListState},
 };
 
-pub fn render_file_list<'a, B: Backend>(
-  state: &'a Interface,
-  list_state: &mut ListState,
-  area: Rect,
-  frame: &mut Frame<B>,
-) {
+pub fn render_file_list<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<B>) {
   let list_items: Vec<ListItem> = state.library.file_list()[state.list_offset
     ..(state.list_offset + area.height as usize).min(state.library.file_list().len())]
     .into_iter()
@@ -44,10 +39,10 @@ pub fn render_file_list<'a, B: Backend>(
         .bg(Color::LightGreen)
         .add_modifier(Modifier::BOLD),
     );
-  frame.render_stateful_widget(list, area, list_state);
+  frame.render_stateful_widget(list, area, &mut state.list_state);
 }
 
-fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> ListItem<'a> {
+fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListItem<'a> {
   ListItem::new(match (node.is_dir(), state.backend.last_played()) {
     (true, _) => Spans::from(vec![
       Span::from(" ".repeat(depth * 2)),
@@ -73,7 +68,7 @@ fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> L
   })
 }
 
-pub fn handle_input<'a>(state: &'a mut Interface, list_state: &mut ListState, key: KeyEvent) {
+pub fn handle_input<'a>(state: &'a mut App, list_state: &mut ListState, key: &KeyEvent) {
   let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
   match key.code {

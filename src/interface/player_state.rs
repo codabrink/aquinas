@@ -6,7 +6,7 @@ use tui::{
   widgets::{Block, Borders, Gauge},
 };
 
-pub fn render<'a, B: Backend>(state: &'a mut Interface, area: &Rect, frame: &mut Frame<B>) {
+pub fn render<'a, B: Backend>(state: &'a mut App, area: &Rect, frame: &mut Frame<B>) {
   let chunks = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![Constraint::Length(2)])

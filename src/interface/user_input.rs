@@ -8,7 +8,7 @@ use tui::{
   widgets::{Block, Borders, Paragraph},
 };
 
-pub fn render<'a, B: Backend>(state: &'a mut Interface, area: Rect, frame: &mut Frame<B>) {
+pub fn render<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<B>) {
   let paragraph = Paragraph::new(state.input.as_ref()).block(
     Block::default()
       .borders(Borders::ALL)
@@ -22,7 +22,7 @@ pub fn render<'a, B: Backend>(state: &'a mut Interface, area: Rect, frame: &mut 
   frame.render_widget(paragraph, area);
 }
 
-pub fn handle_input<'a>(state: &'a mut Interface, key: KeyEvent) {
+pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
   match key.code {
     KeyCode::Backspace => {
       state.input.pop();
@@ -42,7 +42,7 @@ pub fn handle_input<'a>(state: &'a mut Interface, key: KeyEvent) {
   }
 }
 
-pub fn process_cmd<'a>(state: &'a mut Interface) {
+pub fn process_cmd<'a>(state: &'a mut App) {
   match state.focus {
     Focusable::Dir => {
       let mut input = state.input.clone();

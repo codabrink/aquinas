@@ -11,5 +11,5 @@ pub use prelude::*;
 
 #[tokio::main]
 async fn main() {
-  let _ = interface::Interface::new().run_app();
+  let _ = interface::App::new().run_app();
 }

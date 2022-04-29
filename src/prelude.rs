@@ -1,5 +1,6 @@
 pub use anyhow::{bail, Result};
 pub use hashbrown::{HashMap, HashSet};
+pub use parking_lot::Mutex;
 pub use std::{
   ffi::OsStr,
   fs,
