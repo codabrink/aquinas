@@ -1,5 +1,5 @@
 use super::*;
-use termion::event::Key;
+use crossterm::event::KeyCode;
 use tui::layout::Rect;
 use tui::widgets::List;
 use tui::{
