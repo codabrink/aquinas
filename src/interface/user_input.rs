@@ -4,10 +4,11 @@ use super::*;
 use tui::{
   layout::Rect,
   style::{Color, Style},
+  terminal::Frame,
   widgets::{Block, Borders, Paragraph},
 };
 
-pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
+pub fn render<'a, B: Backend>(state: &'a mut Interface, area: Rect, frame: &mut Frame<B>) {
   let paragraph = Paragraph::new(state.input.as_ref()).block(
     Block::default()
       .borders(Borders::ALL)
@@ -21,18 +22,18 @@ pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
   frame.render_widget(paragraph, area);
 }
 
-pub fn handle_input<'a>(state: &'a mut Interface, key: Key) {
-  match key {
-    Key::Backspace => {
+pub fn handle_input<'a>(state: &'a mut Interface, key: KeyEvent) {
+  match key.code {
+    KeyCode::Backspace => {
       state.input.pop();
     }
-    Key::Char('\n') => {
+    KeyCode::Char('\n') => {
       process_cmd(state);
     }
-    Key::Char(c) => {
+    KeyCode::Char(c) => {
       state.input.push(c);
     }
-    Key::Esc => state.focus = Focusable::FileList,
+    KeyCode::Esc => state.focus = Focusable::FileList,
     _ => {}
   }
 

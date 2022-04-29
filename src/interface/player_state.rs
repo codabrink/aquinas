@@ -2,10 +2,11 @@ use super::*;
 use tui::{
   layout::{Constraint, Direction, Layout, Rect},
   style::{Color, Style},
+  terminal::Frame,
   widgets::{Block, Borders, Gauge},
 };
 
-pub fn render<'a>(state: &'a mut Interface, area: &Rect, frame: &mut Frame) {
+pub fn render<'a, B: Backend>(state: &'a mut Interface, area: &Rect, frame: &mut Frame<B>) {
   let chunks = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![Constraint::Length(2)])

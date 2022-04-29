@@ -4,15 +4,16 @@ use tui::layout::Rect;
 use tui::widgets::List;
 use tui::{
   style::{Color, Modifier, Style},
+  terminal::Frame,
   text::{Span, Spans},
   widgets::{Block, Borders, ListItem, ListState},
 };
 
-pub fn render_file_list<'a>(
+pub fn render_file_list<'a, B: Backend>(
   state: &'a Interface,
   list_state: &mut ListState,
   area: Rect,
-  frame: &mut Frame,
+  frame: &mut Frame<B>,
 ) {
   let list_items: Vec<ListItem> = state.library.file_list()[state.list_offset
     ..(state.list_offset + area.height as usize).min(state.library.file_list().len())]
@@ -72,37 +73,39 @@ fn render_list_item<'a>(state: &'a Interface, node: &'a Node, depth: usize) -> L
   })
 }
 
-pub fn handle_input<'a>(state: &'a mut Interface, list_state: &mut ListState, key: Key) {
-  match key {
-    Key::Right | Key::Ctrl('f') => {
+pub fn handle_input<'a>(state: &'a mut Interface, list_state: &mut ListState, key: KeyEvent) {
+  let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+  match key.code {
+    KeyCode::Right | KeyCode::Char('f') if ctrl => {
       if let Some(i) = list_state.selected() {
         state.expand(i + state.list_offset);
       }
     }
-    Key::Left | Key::Ctrl('b') => {
+    KeyCode::Left | KeyCode::Char('b') if ctrl => {
       if let Some(i) = list_state.selected() {
         state.collapse(i + state.list_offset);
       }
     }
-    Key::Char('f') => {
+    KeyCode::Char('f') => {
       state.backend.seek_delta(2);
     }
-    Key::Char('F') => {
+    KeyCode::Char('F') => {
       state.backend.seek_delta(5);
       ()
     }
-    Key::Char('b') => {
+    KeyCode::Char('b') => {
       state.backend.seek_delta(-2);
     }
-    Key::Char('B') => {
+    KeyCode::Char('B') => {
       state.backend.seek_delta(-5);
     }
-    Key::Char('\n') => {
+    KeyCode::Char('\n') => {
       state.play(state.list_index);
     }
-    Key::Char(' ') => state.backend.toggle(),
-    Key::Char('d') => state.focus = Focusable::Dir,
-    Key::Char('s') => state.focus = Focusable::Search,
+    KeyCode::Char(' ') => state.backend.toggle(),
+    KeyCode::Char('d') => state.focus = Focusable::Dir,
+    KeyCode::Char('s') => state.focus = Focusable::Search,
     _ => {}
   }
 }
