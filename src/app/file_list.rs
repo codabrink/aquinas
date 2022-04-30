@@ -9,7 +9,12 @@ use tui::{
   widgets::{Block, Borders, ListItem, ListState},
 };
 
-pub fn render_file_list<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<B>) {
+pub fn render_file_list<'a, B: Backend>(
+  state: &'a mut App,
+  area: Rect,
+  frame: &mut Frame<B>,
+  list_state: &mut ListState,
+) {
   let list_items: Vec<ListItem> = state.library.file_list()[state.list_offset
     ..(state.list_offset + area.height as usize).min(state.library.file_list().len())]
     .into_iter()
@@ -39,7 +44,7 @@ pub fn render_file_list<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &
         .bg(Color::LightGreen)
         .add_modifier(Modifier::BOLD),
     );
-  frame.render_stateful_widget(list, area, &mut state.list_state);
+  frame.render_stateful_widget(list, area, list_state);
 }
 
 fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListItem<'a> {

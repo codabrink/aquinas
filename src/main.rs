@@ -1,5 +1,5 @@
+mod app;
 mod backends;
-mod interface;
 mod library;
 mod metadata;
 mod prelude;
@@ -11,5 +11,5 @@ pub use prelude::*;
 
 #[tokio::main]
 async fn main() {
-  let _ = interface::App::new().run_app();
+  let _ = app::App::new().run_app();
 }

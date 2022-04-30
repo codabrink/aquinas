@@ -32,7 +32,6 @@ pub enum Focusable {
 pub struct App {
   pub backend: Box<dyn AudioBackend>,
   pub library: Library,
-  pub list_state: ListState,
   pub list_index: usize,
   pub list_offset: usize,
   pub height: i32,
@@ -54,7 +53,6 @@ impl App {
       library: Library::new(&path),
       playing: None,
       height: 0,
-      list_state: ListState::default(),
       list_index: 0,
       list_offset: 0,
       focus: Focusable::FileList,
@@ -97,7 +95,7 @@ impl App {
     let mut last_tick = Instant::now();
 
     loop {
-      self.draw(&mut terminal);
+      self.draw(&mut terminal, &mut list_state);
 
       let timeout = tick_rate
         .checked_sub(last_tick.elapsed())
@@ -105,7 +103,7 @@ impl App {
 
       if crossterm::event::poll(timeout)? {
         if let Event::Key(key) = event::read()? {
-          self.on_key(&key, &mut terminal);
+          self.on_key(&key, &mut terminal, &mut list_state);
         }
       }
 
@@ -120,6 +118,7 @@ impl App {
     &mut self,
     key: &KeyEvent,
     terminal: &mut Terminal<B>,
+    list_state: &mut ListState,
   ) -> Result<()> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
@@ -141,19 +140,15 @@ impl App {
             .list_index
             .saturating_sub(self.height.saturating_sub(3) as usize),
         );
-        self
-          .list_state
-          .select(Some(self.list_index.saturating_sub(self.list_offset)));
+        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
       }
       KeyCode::Up | KeyCode::Char('p') if ctrl => {
         self.list_index = self.list_index.saturating_sub(1);
         self.list_offset = self.list_offset.min(self.list_index);
-        self
-          .list_state
-          .select(Some(self.list_index.saturating_sub(self.list_offset)));
+        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
       }
       _ => match self.focus {
-        Focusable::FileList => file_list::handle_input(self, &mut self.list_state, key),
+        Focusable::FileList => file_list::handle_input(self, list_state, key),
         Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
       },
     }
@@ -161,7 +156,11 @@ impl App {
     Ok(())
   }
 
-  fn draw<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<()> {
+  fn draw<B: Backend>(
+    &mut self,
+    terminal: &mut Terminal<B>,
+    list_state: &mut ListState,
+  ) -> Result<()> {
     terminal.draw(|f| {
       self.height = f.size().height as i32;
 
@@ -188,7 +187,7 @@ impl App {
         _ => {}
       }
 
-      file_list::render_file_list(self, chunks[chunks.len() - 2], f);
+      file_list::render_file_list(self, chunks[chunks.len() - 2], f, list_state);
       player_state::render(self, &chunks.last().unwrap(), f);
     })?;
 
