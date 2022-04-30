@@ -1,11 +1,15 @@
-use rodio::OutputStreamHandle;
-use rodio::{Decoder, OutputStream, Source};
-use std::fs::File;
-use std::io::BufReader;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use crate::*;
+use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
+use std::{
+  fs::File,
+  io::BufReader,
+  path::{Path, PathBuf},
+  sync::{
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    Arc,
+  },
+  time::{Duration, Instant},
+};
 
 pub struct Rodio {
   _stream: OutputStream,
@@ -20,8 +24,10 @@ struct Controls {
   paused: AtomicBool,
   seek: AtomicU64,
 
-  playing_since: Mutex<Option<Instant>>,
-  cursor: Mutex<Duration>,
+  // cursor position = elapsed + instant
+  cursor_elapsed: Mutex<Duration>,
+  cursor_instant: Mutex<Option<Instant>>,
+  // used to know when a new stream is playing so the current stream can stop
   playing_index: AtomicUsize,
 }
 
@@ -75,15 +81,15 @@ impl super::Backend for Rodio {
             let paused = controls.paused.load(Ordering::SeqCst);
             src.inner_mut().set_paused(paused);
 
-            let mut cursor = controls.cursor.lock().unwrap();
-            let mut playing_since = controls.playing_since.lock().unwrap();
+            let mut cursor_instant = controls.cursor_instant.lock();
+            let mut cursor_elapsed = controls.cursor_elapsed.lock();
 
-            match (paused, *playing_since) {
+            match (paused, *cursor_instant) {
               (true, Some(ps)) => {
-                *cursor += ps.elapsed();
-                *playing_since = None;
+                *cursor_elapsed += ps.elapsed();
+                *cursor_instant = None;
               }
-              (false, None) => *playing_since = Some(Instant::now()),
+              (false, None) => *cursor_instant = Some(Instant::now()),
               _ => {}
             };
           });
@@ -92,9 +98,11 @@ impl super::Backend for Rodio {
         .skip_duration(Duration::from_secs(seek))
         .convert_samples();
 
-      *self.controls.playing_since.lock().unwrap() = Some(Instant::now());
-      *self.controls.cursor.lock().unwrap() = Duration::from_secs(seek);
-      self.playing_duration = Self::duration(path);
+      {
+        *self.controls.cursor_instant.lock() = Some(Instant::now());
+        *self.controls.cursor_elapsed.lock() = Duration::from_secs(seek);
+        self.playing_duration = Self::duration(path);
+      }
 
       let _ = self.stream.play_raw(samples);
     }
@@ -130,16 +138,17 @@ impl super::Backend for Rodio {
   }
 
   fn progress(&self) -> (f64, u64, u64) {
-    return (0., 0, 240);
-    let mut time_pos = self.controls.cursor.lock().unwrap().as_secs();
-    let playing_since = self.controls.playing_since.lock().unwrap();
+    let pos = {
+      let instant = self.controls.cursor_instant.lock();
+      self.controls.cursor_elapsed.lock().as_secs()
+        + match *instant {
+          Some(instant) => instant.elapsed().as_secs(),
+          None => 0,
+        }
+    };
 
-    if let Some(playing_since) = &*self.controls.playing_since.lock().unwrap() {
-      time_pos += playing_since.elapsed().as_secs();
-    }
-
-    let duration = self.playing_duration;
-    let percent = time_pos as f64 / (duration as f64);
-    (percent, time_pos, duration)
+    let duration = self.playing_duration + 10;
+    let percent = pos as f64 / (duration as f64);
+    (percent, pos, duration)
   }
 }
