@@ -42,10 +42,10 @@ impl Library {
     };
 
     library.open_dirs.insert(root.path.clone());
-    // let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
+    let nodes: FileList = root.path.as_path().to_iter(&library.dirs, None).collect();
     // let mask_map = Library::build_index(root.path.clone(), &nodes);
 
-    // library.list = nodes;
+    library.list = nodes;
     // library.mask_map = mask_map;
 
     library
@@ -292,6 +292,7 @@ mod tests {
         .join("Pendulum")
         .join("Immersion"),
     );
+    assert_eq!(library.list.len(), 15);
 
     // println!("Mask: {:?}", library.mask_map);
   }

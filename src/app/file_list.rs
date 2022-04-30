@@ -76,36 +76,36 @@ fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListIte
 pub fn handle_input<'a>(state: &'a mut App, list_state: &mut ListState, key: &KeyEvent) {
   let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
-  match key.code {
-    KeyCode::Right | KeyCode::Char('f') if ctrl => {
+  match (key.code, ctrl) {
+    (KeyCode::Right, _) | (KeyCode::Char('f'), true) => {
       if let Some(i) = list_state.selected() {
         state.expand(i + state.list_offset);
       }
     }
-    KeyCode::Left | KeyCode::Char('b') if ctrl => {
+    (KeyCode::Left, _) | (KeyCode::Char('b'), true) => {
       if let Some(i) = list_state.selected() {
         state.collapse(i + state.list_offset);
       }
     }
-    KeyCode::Char('f') => {
+    (KeyCode::Char('f'), _) => {
       state.backend.seek_delta(2);
     }
-    KeyCode::Char('F') => {
+    (KeyCode::Char('F'), _) => {
       state.backend.seek_delta(5);
       ()
     }
-    KeyCode::Char('b') => {
+    (KeyCode::Char('b'), _) => {
       state.backend.seek_delta(-2);
     }
-    KeyCode::Char('B') => {
+    (KeyCode::Char('B'), _) => {
       state.backend.seek_delta(-5);
     }
-    KeyCode::Char('\n') => {
+    (KeyCode::Enter, _) => {
       state.play(state.list_index);
     }
-    KeyCode::Char(' ') => state.backend.toggle(),
-    KeyCode::Char('d') => state.focus = Focusable::Dir,
-    KeyCode::Char('s') => state.focus = Focusable::Search,
+    (KeyCode::Char(' '), _) => state.backend.toggle(),
+    (KeyCode::Char('d'), _) => state.focus = Focusable::Dir,
+    (KeyCode::Char('s'), _) => state.focus = Focusable::Search,
     _ => {}
   }
 }

@@ -11,5 +11,7 @@ pub use prelude::*;
 
 #[tokio::main]
 async fn main() {
-  let _ = app::App::new().run_app();
+  let mut app = app::App::new();
+  let result = app.run_app();
+  println!("{:?}", result);
 }

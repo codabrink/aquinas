@@ -46,6 +46,7 @@ impl App {
   pub fn new() -> Self {
     let path = std::env::current_dir().expect("Could not get current dir.");
     let backend = backends::load();
+
     let progress = backend.progress();
 
     let mut app = Self {
@@ -60,7 +61,7 @@ impl App {
       progress,
       play_index: 0,
     };
-    app.set_root(&path);
+    // app.set_root(&path);
 
     // Development code
     app.focus = Focusable::Dir;
@@ -90,12 +91,11 @@ impl App {
     let mut terminal = Terminal::new(backend)?;
 
     let mut list_state = ListState::default();
-
     let tick_rate = Duration::from_millis(200);
     let mut last_tick = Instant::now();
 
     loop {
-      self.draw(&mut terminal, &mut list_state);
+      self.draw(&mut terminal, &mut list_state)?;
 
       let timeout = tick_rate
         .checked_sub(last_tick.elapsed())
@@ -103,12 +103,12 @@ impl App {
 
       if crossterm::event::poll(timeout)? {
         if let Event::Key(key) = event::read()? {
-          self.on_key(&key, &mut terminal, &mut list_state);
+          self.on_key(&key, &mut terminal, &mut list_state)?;
         }
       }
 
       if last_tick.elapsed() > tick_rate {
-        self.on_tick();
+        self.on_tick()?;
         last_tick = Instant::now();
       }
     }
@@ -122,8 +122,8 @@ impl App {
   ) -> Result<()> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
-    match key.code {
-      KeyCode::Char('q') => {
+    match (key.code, ctrl) {
+      (KeyCode::Char('q'), _) => {
         disable_raw_mode()?;
         execute!(
           terminal.backend_mut(),
@@ -132,7 +132,7 @@ impl App {
         )?;
         std::process::exit(0);
       }
-      KeyCode::Down | KeyCode::Char('n') if ctrl => {
+      (KeyCode::Down, _) | (KeyCode::Char('n'), true) => {
         self.list_index =
           (self.list_index + 1).min(self.library.file_list().len().saturating_sub(1));
         self.list_offset = self.list_offset.max(
@@ -142,7 +142,7 @@ impl App {
         );
         list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
       }
-      KeyCode::Up | KeyCode::Char('p') if ctrl => {
+      (KeyCode::Up, _) | (KeyCode::Char('p'), true) => {
         self.list_index = self.list_index.saturating_sub(1);
         self.list_offset = self.list_offset.min(self.list_index);
         list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));

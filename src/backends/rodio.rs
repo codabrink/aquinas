@@ -130,7 +130,7 @@ impl super::Backend for Rodio {
   }
 
   fn progress(&self) -> (f64, u64, u64) {
-    // return (0., 0, 0);
+    return (0., 0, 240);
     let mut time_pos = self.controls.cursor.lock().unwrap().as_secs();
     let playing_since = self.controls.playing_since.lock().unwrap();
 
@@ -141,19 +141,5 @@ impl super::Backend for Rodio {
     let duration = self.playing_duration;
     let percent = time_pos as f64 / (duration as f64);
     (percent, time_pos, duration)
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use crate::backends::rodio::*;
-  use crate::*;
-  #[test]
-  fn test_duration() {
-    let path = Path::new("assets/brighter.ogg");
-
-    assert!(path.is_file());
-    let dur = Rodio::duration(path);
-    assert!(dur > 0);
   }
 }
