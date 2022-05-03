@@ -12,3 +12,10 @@ pub use std::{
 };
 
 pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "opus", "flac", "wav"];
+
+pub fn extension<'a>(path: &'a Path) -> Option<&'a str> {
+  if let Some(ext) = path.extension() {
+    return ext.to_str();
+  }
+  None
+}

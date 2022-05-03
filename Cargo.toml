@@ -20,6 +20,8 @@ parking_lot = "0.12"
 
 # mp3, flac
 audiotags = "0.2"
+# mp3
+mp3-duration = "0.1"
 # opus
 opus_headers = "0.1"
 # ogg

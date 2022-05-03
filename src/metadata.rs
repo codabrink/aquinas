@@ -14,20 +14,21 @@ pub struct Metadata {
 }
 
 pub fn get_metadata(path: &Path) -> Option<Metadata> {
-  if path.is_dir() {
-    return None;
-  }
-  match path.extension() {
-    Some(ext) => {
-      let ext = ext.to_string_lossy().to_lowercase();
-      match ext.as_str() {
-        "ogg" => vorbis(path),
-        _ => other(path),
-      }
-      .ok()
+  if let Some(ext) = extension(path) {
+    return match ext {
+      "ogg" => vorbis(path),
+      _ => other(path),
     }
-    None => None,
+    .ok();
   }
+  None
+}
+
+pub fn duration(path: &Path) -> Option<u64> {
+  if let Some(ext) = extension(path) {
+    // TODO: import test code
+  }
+  None
 }
 
 fn other(path: &Path) -> Result<Metadata> {

@@ -1,5 +1,6 @@
 mod app;
 mod backends;
+mod duration;
 mod library;
 mod metadata;
 mod prelude;

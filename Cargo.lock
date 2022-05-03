@@ -61,6 +61,7 @@ dependencies = [
  "gstreamer-player",
  "hashbrown",
  "lewton",
+ "mp3-duration",
  "ogg_metadata",
  "opus_headers",
  "parking_lot 0.12.0",
@@ -919,6 +920,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "mp3-duration"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "348bdc7300502f0801e5b57c448815713cd843b744ef9bda252a2698fdf90a0f"
+dependencies = [
+ "thiserror",
 ]
 
 [[package]]

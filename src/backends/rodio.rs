@@ -139,9 +139,8 @@ impl super::Backend for Rodio {
 
   fn progress(&self) -> (f64, u64, u64) {
     let pos = {
-      let instant = self.controls.cursor_instant.lock();
       self.controls.cursor_elapsed.lock().as_secs()
-        + match *instant {
+        + match *self.controls.cursor_instant.lock() {
           Some(instant) => instant.elapsed().as_secs(),
           None => 0,
         }
@@ -150,5 +149,37 @@ impl super::Backend for Rodio {
     let duration = self.playing_duration + 10;
     let percent = pos as f64 / (duration as f64);
     (percent, pos, duration)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::*;
+  use std::env;
+  use std::path::Path;
+
+  use ogg_metadata::OggFormat;
+
+  use super::Rodio;
+
+  #[test]
+  fn duration() {
+    let home = env::var("HOME").unwrap();
+    let song_path = Path::new(&home)
+      .join("Music")
+      .join("Long Arm")
+      .join("Silent Opera")
+      .join("Long Arm - Silent Opera - 06 He's Afraid To Eat.ogg");
+
+    let mut rodio = Rodio::new();
+    let file = std::fs::File::open(&song_path).unwrap();
+    let fmt = ogg_metadata::read_format(&file).unwrap();
+    if let Some(OggFormat::Vorbis(meta)) = fmt.first() {
+      let seconds = meta.length_in_samples.map(|s| s / meta.sample_rate as u64);
+      println!("Samples: {:?}", meta.length_in_samples);
+      println!("Sample Rate: {:?}", meta.sample_rate);
+      println!("Duration: {:?}", seconds);
+    }
+    // rodio.play(path)
   }
 }
