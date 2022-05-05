@@ -1,7 +1,7 @@
 [package]
 name = "aquinas"
 version = "0.1.0"
-authors = ["Dakota Brink <aquinas@dakota.io>"]
+authors = ["Dakota Brink <git@kota.is>"]
 edition = "2021"
 
 [dependencies]
