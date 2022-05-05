@@ -1,4 +1,5 @@
 mod gstreamer;
+#[cfg(feature = "rodio_backend")]
 mod rodio;
 
 use std::boxed::Box;
@@ -7,9 +8,9 @@ use std::path::{Path, PathBuf};
 pub fn load() -> Box<dyn Backend> {
   // in the future this will be configurable,
   // but for now we only have one backend.
-
-  Box::new(gstreamer::GStreamer::new())
-  // Box::new(rodio::Rodio::new())
+  #[cfg(feature = "rodio_backend")]
+  return Box::new(rodio::Rodio::new());
+  return Box::new(gstreamer::GStreamer::new());
 }
 
 pub trait Backend {

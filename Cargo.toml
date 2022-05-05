@@ -15,18 +15,22 @@ crossterm = "0.23"
 crossbeam-channel = "0.5"
 hashbrown = "0.12"
 tokio = { version = "1.17", features = ["full"] }
-rodio = "0.15"
+rodio = { version = "0.15", optional = true }
 parking_lot = "0.12"
 
 # mp3, flac
 audiotags = "0.2"
 # mp3
-mp3-duration = "0.1"
+mp3-duration = { version = "0.1", optional = true }
 # opus
 opus_headers = "0.1"
 # ogg
 lewton = "0.10"
-ogg_metadata = "0.4.1"
+ogg_metadata = { version = "0.4.1", optional = true }
+
+[features]
+default = []
+rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
 
 [profile.release]
 strip = true
