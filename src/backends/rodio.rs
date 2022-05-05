@@ -5,7 +5,7 @@ use std::{
   io::BufReader,
   path::{Path, PathBuf},
   sync::{
-    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicI64, AtomicU64, AtomicUsize, Ordering},
     Arc,
   },
   time::{Duration, Instant},
@@ -53,12 +53,7 @@ impl super::Backend for Rodio {
   }
 
   fn duration(path: &Path) -> u64 {
-    if let Some(source) = Self::create_source(path) {
-      if let Some(duration) = source.total_duration() {
-        return duration.as_secs();
-      }
-    }
-    0
+    crate::duration::duration(path).unwrap_or(0)
   }
 
   fn play(&mut self, path: &Path) {
@@ -131,24 +126,30 @@ impl super::Backend for Rodio {
     }
   }
 
-  fn seek_delta(&mut self, delta_time: i64) {}
+  fn seek_delta(&mut self, delta_time: i64) {
+    let position = (self.position() as i64).saturating_add(delta_time);
+    self.seek(position as u64);
+  }
 
   fn last_played(&self) -> Option<&PathBuf> {
     self.playing.as_ref()
   }
 
   fn progress(&self) -> (f64, u64, u64) {
-    let pos = {
-      self.controls.cursor_elapsed.lock().as_secs()
-        + match *self.controls.cursor_instant.lock() {
-          Some(instant) => instant.elapsed().as_secs(),
-          None => 0,
-        }
-    };
-
+    let position = self.position();
     let duration = self.playing_duration + 10;
-    let percent = pos as f64 / (duration as f64);
-    (percent, pos, duration)
+    let percent = position as f64 / (duration as f64);
+    (percent, position, duration)
+  }
+}
+
+impl Rodio {
+  fn position(&self) -> u64 {
+    self.controls.cursor_elapsed.lock().as_secs()
+      + match *self.controls.cursor_instant.lock() {
+        Some(instant) => instant.elapsed().as_secs(),
+        None => 0,
+      }
   }
 }
 

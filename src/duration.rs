@@ -30,6 +30,7 @@ pub fn duration(path: &Path) -> Result<u64> {
     }
   }
 
+  // Last resort
   // Get it the honky and expensive way - count the samples
   duration_from_samples(path)
 }
@@ -37,8 +38,10 @@ pub fn duration(path: &Path) -> Result<u64> {
 fn duration_from_samples(path: &Path) -> Result<u64> {
   let file = File::open(path)?;
   let source = Decoder::new(BufReader::new(file))?;
+
   let sample_rate = source.sample_rate();
   let channels = source.channels();
   let samples = source.count();
+
   Ok(samples as u64 / sample_rate as u64 / channels as u64)
 }
