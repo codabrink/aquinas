@@ -8,8 +8,8 @@ pub fn load() -> Box<dyn Backend> {
   // in the future this will be configurable,
   // but for now we only have one backend.
 
-  // Box::new(gstreamer::GStreamer::new())
-  Box::new(rodio::Rodio::new())
+  Box::new(gstreamer::GStreamer::new())
+  // Box::new(rodio::Rodio::new())
 }
 
 pub trait Backend {
