@@ -4,10 +4,11 @@ use super::*;
 use tui::{
   layout::Rect,
   style::{Color, Style},
+  terminal::Frame,
   widgets::{Block, Borders, Paragraph},
 };
 
-pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
+pub fn render<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<B>) {
   let paragraph = Paragraph::new(state.input.as_ref()).block(
     Block::default()
       .borders(Borders::ALL)
@@ -21,23 +22,27 @@ pub fn render<'a>(state: &'a mut Interface, area: Rect, frame: &mut Frame) {
   frame.render_widget(paragraph, area);
 }
 
-pub fn handle_input(state: &mut Interface, key: Key) {
-  match key {
-    Key::Backspace => {
+pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
+  match key.code {
+    KeyCode::Backspace => {
       state.input.pop();
     }
-    Key::Char('\n') => {
+    KeyCode::Char('\n') => {
       process_cmd(state);
     }
-    Key::Char(c) => {
+    KeyCode::Char(c) => {
       state.input.push(c);
     }
-    Key::Esc => state.focus = Focusable::FileList,
+    KeyCode::Esc => state.focus = Focusable::FileList,
     _ => {}
+  }
+
+  if state.focus == Focusable::Search {
+    state.library.search(&state.input);
   }
 }
 
-pub fn process_cmd(state: &mut Interface) {
+pub fn process_cmd<'a>(state: &'a mut App) {
   match state.focus {
     Focusable::Dir => {
       let mut input = state.input.clone();
@@ -46,12 +51,11 @@ pub fn process_cmd(state: &mut Interface) {
       }
       let input_str = input.as_str().trim();
 
-      let path = match (input_str, &state.root) {
-        ("..", Some(root)) => {
-          let path = &root.path;
-          let parent = match path.parent() {
+      let path = match (input_str, &state.library.root) {
+        ("..", root) => {
+          let parent = match root.path.parent() {
             Some(parent) => parent,
-            _ => path,
+            _ => &root.path,
           };
           PathBuf::from(parent)
         }
@@ -60,6 +64,12 @@ pub fn process_cmd(state: &mut Interface) {
 
       if path.is_dir() {
         state.set_root(&path);
+      }
+    }
+    Focusable::Search => {
+      if let Some(node) = state.highlighted() {
+        state.library.search("");
+        state.play_path(&node.path);
       }
     }
     _ => {}
