@@ -3,7 +3,8 @@ pub use hashbrown::{HashMap, HashSet};
 pub use parking_lot::Mutex;
 pub use std::{
   ffi::OsStr,
-  fs,
+  fs::{self, File},
+  io::BufReader,
   path::{Path, PathBuf},
   rc::Rc,
   sync::Arc,

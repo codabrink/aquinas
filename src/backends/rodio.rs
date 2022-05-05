@@ -159,6 +159,8 @@ mod tests {
   use std::path::Path;
 
   use ogg_metadata::OggFormat;
+  use rodio::{source::SamplesConverter, Decoder, OutputStream, OutputStreamHandle, Source};
+  use std::io::BufReader;
 
   use super::Rodio;
 
@@ -173,6 +175,18 @@ mod tests {
 
     let mut rodio = Rodio::new();
     let file = std::fs::File::open(&song_path).unwrap();
+
+    let source = Decoder::new(BufReader::new(file)).unwrap();
+    let rate = source.sample_rate();
+    let channels = source.channels();
+    let count = source.count();
+    // let count = source.current_frame_len().unwrap();
+
+    let seconds = count as u64 / rate as u64 / channels as u64;
+    println!("Duration: {:?}", seconds);
+
+    let file = std::fs::File::open(&song_path).unwrap();
+
     let fmt = ogg_metadata::read_format(&file).unwrap();
     if let Some(OggFormat::Vorbis(meta)) = fmt.first() {
       let seconds = meta.length_in_samples.map(|s| s / meta.sample_rate as u64);
@@ -180,6 +194,7 @@ mod tests {
       println!("Sample Rate: {:?}", meta.sample_rate);
       println!("Duration: {:?}", seconds);
     }
+
     // rodio.play(path)
   }
 }
