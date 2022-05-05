@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use audiotags::Tag;
 use lewton::inside_ogg::OggStreamReader;
-use ogg_metadata::{read_format, AudioMetadata, OggFormat::Vorbis, VorbisMetadata};
+use ogg_metadata::{read_format, AudioMetadata, OggFormat::Vorbis};
 use std::fs;
 
 #[derive(PartialEq, Default, Clone, Debug, PartialOrd, Eq, Ord)]
@@ -20,13 +20,6 @@ pub fn get_metadata(path: &Path) -> Option<Metadata> {
       _ => other(path),
     }
     .ok();
-  }
-  None
-}
-
-pub fn duration(path: &Path) -> Option<u64> {
-  if let Some(ext) = extension(path) {
-    // TODO: import test code
   }
   None
 }
