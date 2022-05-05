@@ -22,7 +22,11 @@ pub struct Rodio {
 #[derive(Default)]
 struct Controls {
   paused: AtomicBool,
+
+  // used to start playback in middle of file
   seek: AtomicU64,
+  // used to skip forward without restarting playback
+  seek_delta: AtomicU64,
 
   // cursor position = elapsed + instant
   cursor_elapsed: Mutex<Duration>,

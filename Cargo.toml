@@ -27,3 +27,7 @@ opus_headers = "0.1"
 # ogg
 lewton = "0.10"
 ogg_metadata = "0.4.1"
+
+[profile.release]
+strip = true
+lto = true

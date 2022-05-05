@@ -22,7 +22,7 @@ pub fn render<'a, B: Backend>(state: &'a mut App, area: &Rect, frame: &mut Frame
   let gauge = Gauge::default()
     .block(Block::default().borders(Borders::TOP))
     .gauge_style(Style::default().fg(Color::Blue))
-    .percent((pct * 100.) as u16)
+    .percent(((pct * 100.) as u16).min(100))
     .label(format!(
       "{}{}:{:0>2}/{}:{:0>2}",
       state
