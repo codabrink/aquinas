@@ -65,6 +65,10 @@ pub fn process_cmd<'a>(state: &'a mut App) {
 
       if path.is_dir() {
         state.set_root(&path);
+
+        let mut meta = Meta::load().unwrap_or_default();
+        meta.last_path = path.into();
+        let _ = meta.save();
       }
     }
     Focusable::Search => {

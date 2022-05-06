@@ -73,10 +73,13 @@ impl App {
     };
     // app.set_root(&path);
 
-    // Development code
-    app.focus = Focusable::Dir;
-    app.input = "~/Music".to_owned();
-    user_input::process_cmd(&mut app);
+    if let Ok(meta) = Meta::load() {
+      if let Some(last_path) = meta.last_path {
+        app.focus = Focusable::Dir;
+        app.input = last_path.display().to_string();
+        user_input::process_cmd(&mut app);
+      }
+    }
 
     app.library.rebuild();
 
@@ -94,6 +97,7 @@ impl App {
         library.expand(path);
       }
     }
+    library.rebuild();
     self.library = library;
   }
 
