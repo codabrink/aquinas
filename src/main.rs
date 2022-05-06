@@ -1,5 +1,6 @@
 mod app;
 mod backends;
+mod config;
 #[cfg(feature = "rodio_backend")]
 mod duration;
 mod library;
@@ -8,6 +9,7 @@ mod metadata;
 mod prelude;
 
 pub use backends::Backend as AudioBackend;
+pub use config::Config;
 pub use library::{Library, Node};
 pub use meta::Meta;
 pub use metadata::{get_metadata, Metadata};

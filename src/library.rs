@@ -15,7 +15,7 @@ pub struct Library {
   pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
-  metadata: HashMap<PathBuf, Metadata>,
+  _metadata: HashMap<PathBuf, Metadata>,
   shallow_list: FileList,
   list: FileList,
   masked_list: FileList,
@@ -32,7 +32,7 @@ impl Library {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
-      metadata: HashMap::new(),
+      _metadata: HashMap::new(),
       shallow_list: Vec::new(),
       query: String::new(),
       list: Vec::new(),
@@ -105,6 +105,7 @@ pub struct DirsIter<'a> {
   dirs: &'a Dirs,
   open_dirs: Option<&'a OpenDirs>,
   stack: FileList,
+  config: Config,
 }
 
 pub trait IterablePath<'a> {
@@ -126,6 +127,7 @@ impl<'a> IterablePath<'a> for &Path {
       dirs,
       open_dirs,
       stack,
+      config: Config::load().unwrap_or_default(),
     }
   }
 }
@@ -149,9 +151,11 @@ impl<'a> Iterator for DirsIter<'a> {
         MaybeNode::Node(n) => n,
       };
 
-      if self.open_dirs.is_none() || self.open_dirs.unwrap().contains(&child.path) {
-        self.stack.push((child.clone(), 0));
-        return Some((child, self.stack.len() - 1));
+      if self.stack.len() < self.config.scan_depth_limit {
+        if self.open_dirs.is_none() || self.open_dirs.unwrap().contains(&child.path) {
+          self.stack.push((child.clone(), 0));
+          return Some((child, self.stack.len() - 1));
+        }
       }
 
       return Some((child, self.stack.len()));

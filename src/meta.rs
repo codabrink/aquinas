@@ -7,7 +7,7 @@ pub struct Meta {
 }
 
 impl Meta {
-  fn config_dir() -> Result<PathBuf> {
+  pub fn config_dir() -> Result<PathBuf> {
     let config_dir = dirs::data_local_dir()
       .expect("Cannot save meta info")
       .join("aquinas");
@@ -19,14 +19,12 @@ impl Meta {
     let config_dir = Self::config_dir()?;
     let _ = std::fs::create_dir_all(&config_dir);
     let _ = std::fs::write(config_dir.join("meta.toml"), toml::to_string(self)?);
-
     Ok(())
   }
 
   pub fn load() -> Result<Self> {
     let config_dir = Self::config_dir()?;
     let serialized = std::fs::read_to_string(config_dir.join("meta.toml"))?;
-    let meta = toml::from_str(&serialized)?;
-    Ok(meta)
+    Ok(toml::from_str(&serialized)?)
   }
 }

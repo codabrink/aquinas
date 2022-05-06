@@ -45,6 +45,7 @@ fn duration_from_samples(path: &Path) -> Result<u64> {
 
   let sample_rate = source.sample_rate();
   let channels = source.channels();
+  // beware - this is expensive, and a last resort
   let samples = source.count();
 
   Ok(samples as u64 / sample_rate as u64 / channels as u64)
