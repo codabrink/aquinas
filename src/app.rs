@@ -134,9 +134,10 @@ impl App {
     terminal: &mut Terminal<B>,
   ) -> Result<()> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let alt = key.modifiers.contains(KeyModifiers::ALT);
 
-    match (key.code, ctrl) {
-      (KeyCode::Char('q'), _) => {
+    match (key.code, ctrl, alt) {
+      (KeyCode::Char('q'), _, _) => {
         disable_raw_mode()?;
         execute!(
           terminal.backend_mut(),
@@ -145,11 +146,17 @@ impl App {
         )?;
         std::process::exit(0);
       }
-      (KeyCode::Down, _) | (KeyCode::Char('n'), true) => {
+      (KeyCode::Down, _, _) | (KeyCode::Char('n'), true, _) => {
         self.message(AppMessage::SelectDelta(1));
       }
-      (KeyCode::Up, _) | (KeyCode::Char('p'), true) => {
+      (KeyCode::Up, _, _) | (KeyCode::Char('p'), true, _) => {
         self.message(AppMessage::SelectDelta(-1));
+      }
+      (KeyCode::Char('v'), true, _) => {
+        self.message(AppMessage::SelectDelta(10));
+      }
+      (KeyCode::Char('v'), _, true) => {
+        self.message(AppMessage::SelectDelta(-10));
       }
       _ => match self.focus {
         Focusable::FileList => file_list::handle_input(self, key),
@@ -278,6 +285,7 @@ impl App {
 
   fn select(&mut self, index: usize, list_state: &mut ListState) {
     let height = self.height as usize - 1;
+    let index = index.min(self.library.file_list().len());
 
     self.selected = Some(index);
     self.window_offset = self

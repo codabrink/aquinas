@@ -28,6 +28,6 @@ pub trait AquinasVec<T> {
 
 impl<T> AquinasVec<T> for Vec<T> {
   fn get_range(&self, range: &Range<usize>) -> &[T] {
-    &self[range.start..range.end.min(self.len())]
+    &self[range.start.min(self.len())..range.end.min(self.len())]
   }
 }

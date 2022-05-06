@@ -1,3 +1,4 @@
+#[cfg(feature = "gstreamer_backend")]
 mod gstreamer;
 #[cfg(feature = "rodio_backend")]
 mod rodio;
@@ -10,6 +11,7 @@ pub fn load() -> Box<dyn Backend> {
   // but for now we only have one backend.
   #[cfg(feature = "rodio_backend")]
   return Box::new(rodio::Rodio::new());
+  #[cfg(feature = "gstreamer_backend")]
   return Box::new(gstreamer::GStreamer::new());
 }
 
