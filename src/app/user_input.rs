@@ -22,7 +22,7 @@ pub fn render<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<
   frame.render_widget(paragraph, area);
 }
 
-pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent, list_state: &mut ListState) {
+pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
   match key.code {
     KeyCode::Backspace => {
       state.input.pop();
@@ -39,8 +39,8 @@ pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent, list_state: &mut Lis
 
   if state.focus == Focusable::Search {
     // reset selection
-    list_state.select(Some(0));
 
+    state.message(AppMessage::Select(0));
     state.library.search(&state.input);
   }
 }

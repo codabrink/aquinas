@@ -15,7 +15,10 @@ pub fn render_file_list<'a, B: Backend>(
   frame: &mut Frame<B>,
   list_state: &mut ListState,
 ) {
-  let list_items: Vec<ListItem> = state.library.file_list()[state.view_range()]
+  let list_items: Vec<ListItem> = state
+    .library
+    .file_list()
+    .get_range(&state.view_range())
     .into_iter()
     .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();

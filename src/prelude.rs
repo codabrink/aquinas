@@ -21,3 +21,13 @@ pub fn extension<'a>(path: &'a Path) -> Option<&'a str> {
   }
   None
 }
+
+pub trait AquinasVec<T> {
+  fn get_range(&self, range: &Range<usize>) -> &[T];
+}
+
+impl<T> AquinasVec<T> for Vec<T> {
+  fn get_range(&self, range: &Range<usize>) -> &[T] {
+    &self[range.start..range.end.min(self.len())]
+  }
+}

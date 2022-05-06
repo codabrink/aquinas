@@ -83,7 +83,7 @@ impl App {
     app
   }
 
-  pub fn mailbox(&self, msg: AppMessage) {
+  pub fn message(&self, msg: AppMessage) {
     let _ = self.mailbox.0.send(msg);
   }
 
@@ -147,14 +147,14 @@ impl App {
         std::process::exit(0);
       }
       (KeyCode::Down, _) | (KeyCode::Char('n'), true) => {
-        self.mailbox(AppMessage::SelectDelta(1));
+        self.message(AppMessage::SelectDelta(1));
       }
       (KeyCode::Up, _) | (KeyCode::Char('p'), true) => {
-        self.mailbox(AppMessage::SelectDelta(-1));
+        self.message(AppMessage::SelectDelta(-1));
       }
       _ => match self.focus {
         Focusable::FileList => file_list::handle_input(self, key),
-        Focusable::Dir | Focusable::Search => user_input::handle_input(self, key, list_state),
+        Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
       },
     }
 
@@ -276,7 +276,7 @@ impl App {
     }
   }
 
-  pub fn select(&mut self, index: usize, list_state: &mut ListState) {
+  fn select(&mut self, index: usize, list_state: &mut ListState) {
     let height = self.height as usize - 1;
 
     self.selected = Some(index);
