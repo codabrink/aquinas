@@ -5,6 +5,7 @@ pub use std::{
   ffi::OsStr,
   fs::{self, File},
   io::BufReader,
+  ops::Range,
   path::{Path, PathBuf},
   rc::Rc,
   sync::Arc,

@@ -39,6 +39,10 @@ fn duration_from_samples(path: &Path) -> Result<u64> {
   let file = File::open(path)?;
   let source = Decoder::new(BufReader::new(file))?;
 
+  if let Some(duration) = source.total_duration() {
+    return Ok(duration.as_secs());
+  }
+
   let sample_rate = source.sample_rate();
   let channels = source.channels();
   let samples = source.count();

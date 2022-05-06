@@ -17,6 +17,7 @@ hashbrown = "0.12"
 tokio = { version = "1.17", features = ["full"] }
 rodio = { version = "0.15", optional = true }
 parking_lot = "0.12"
+toml = "0.5"
 
 # mp3, flac
 audiotags = "0.2"

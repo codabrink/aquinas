@@ -4,6 +4,7 @@ mod user_input;
 
 use crate::*;
 use anyhow::Result;
+use crossbeam_channel::{Receiver, Sender};
 use crossterm::{
   event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers},
   execute,
@@ -29,17 +30,23 @@ pub enum Focusable {
   Search,
 }
 
+pub enum AppMessage {
+  Select(usize),
+  SelectDelta(i64),
+}
+
 pub struct App {
   pub backend: Box<dyn AudioBackend>,
   pub library: Library,
-  pub list_index: usize,
-  pub list_offset: usize,
   pub height: i32,
   pub input: String,
   pub focus: Focusable,
+  pub selected: Option<usize>,
+  pub window_offset: usize,
   pub progress: (f64, u64, u64),
   pub playing: Option<Arc<Node>>,
   pub play_index: usize,
+  mailbox: (Sender<AppMessage>, Receiver<AppMessage>),
 }
 
 impl App {
@@ -49,17 +56,20 @@ impl App {
 
     let progress = backend.progress();
 
+    let mailbox = crossbeam_channel::unbounded();
+
     let mut app = Self {
       backend,
       library: Library::new(&path),
       playing: None,
       height: 0,
-      list_index: 0,
-      list_offset: 0,
       focus: Focusable::FileList,
       input: String::new(),
+      selected: None,
+      window_offset: 0,
       progress,
       play_index: 0,
+      mailbox,
     };
     // app.set_root(&path);
 
@@ -71,6 +81,10 @@ impl App {
     app.library.rebuild();
 
     app
+  }
+
+  pub fn mailbox(&self, msg: AppMessage) {
+    let _ = self.mailbox.0.send(msg);
   }
 
   pub fn set_root(&mut self, path: &Path) {
@@ -95,11 +109,13 @@ impl App {
     let mut last_tick = Instant::now();
 
     loop {
-      self.draw(&mut terminal, &mut list_state)?;
-
       let timeout = tick_rate
         .checked_sub(last_tick.elapsed())
         .unwrap_or_else(|| Duration::from_secs(0));
+
+      if last_tick.elapsed() > tick_rate {
+        last_tick = Instant::now();
+      }
 
       if crossterm::event::poll(timeout)? {
         if let Event::Key(key) = event::read()? {
@@ -107,10 +123,8 @@ impl App {
         }
       }
 
-      if last_tick.elapsed() > tick_rate {
-        self.on_tick()?;
-        last_tick = Instant::now();
-      }
+      self.update(&mut list_state)?;
+      self.draw(&mut terminal, &mut list_state)?;
     }
   }
 
@@ -133,23 +147,14 @@ impl App {
         std::process::exit(0);
       }
       (KeyCode::Down, _) | (KeyCode::Char('n'), true) => {
-        self.list_index =
-          (self.list_index + 1).min(self.library.file_list().len().saturating_sub(1));
-        self.list_offset = self.list_offset.max(
-          self
-            .list_index
-            .saturating_sub(self.height.saturating_sub(3) as usize),
-        );
-        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
+        self.mailbox(AppMessage::SelectDelta(1));
       }
       (KeyCode::Up, _) | (KeyCode::Char('p'), true) => {
-        self.list_index = self.list_index.saturating_sub(1);
-        self.list_offset = self.list_offset.min(self.list_index);
-        list_state.select(Some(self.list_index.saturating_sub(self.list_offset)));
+        self.mailbox(AppMessage::SelectDelta(-1));
       }
       _ => match self.focus {
-        Focusable::FileList => file_list::handle_input(self, list_state, key),
-        Focusable::Dir | Focusable::Search => user_input::handle_input(self, key),
+        Focusable::FileList => file_list::handle_input(self, key),
+        Focusable::Dir | Focusable::Search => user_input::handle_input(self, key, list_state),
       },
     }
 
@@ -162,7 +167,7 @@ impl App {
     list_state: &mut ListState,
   ) -> Result<()> {
     terminal.draw(|f| {
-      self.height = f.size().height as i32;
+      self.height = f.size().height as i32 - 1;
 
       let v_constraints = match self.focus {
         Focusable::Dir | Focusable::Search => {
@@ -194,20 +199,34 @@ impl App {
     Ok(())
   }
 
-  fn on_tick(&mut self) -> Result<()> {
+  fn update(&mut self, list_state: &mut ListState) -> Result<()> {
     self.progress = self.backend.progress();
 
     self.ensure_continue();
+
+    let messages: Vec<AppMessage> = self.mailbox.1.try_iter().collect();
+    for msg in messages {
+      match msg {
+        AppMessage::Select(index) => {
+          self.select(index, list_state);
+        }
+        AppMessage::SelectDelta(delta) => {
+          let index = self.selected.unwrap_or(0) as i64 + delta;
+          self.select(index.max(0) as usize, list_state);
+        }
+      }
+    }
 
     Ok(())
   }
 
   pub fn highlighted(&mut self) -> Option<Arc<Node>> {
-    self
-      .library
-      .file_list()
-      .get(self.list_index + self.list_offset)
-      .map(|(n, _)| n.clone())
+    if let Some(selected) = self.selected {
+      if let Some((node, _)) = self.library.file_list().get(selected) {
+        return Some(node.clone());
+      }
+    }
+    None
   }
 
   pub fn play(&mut self, index: usize) {
@@ -257,11 +276,26 @@ impl App {
     }
   }
 
+  pub fn select(&mut self, index: usize, list_state: &mut ListState) {
+    let height = self.height as usize - 1;
+
+    self.selected = Some(index);
+    self.window_offset = self
+      .window_offset
+      .max(index.saturating_sub(height))
+      .min(index);
+    list_state.select(Some(index - self.window_offset));
+  }
+
   pub fn expand(&mut self, index: usize) {
     if let Some((node, _)) = self.library.file_list().get(index) {
       let path = node.path.clone();
       self.library.expand(path);
     }
+  }
+
+  pub fn view_range(&self) -> Range<usize> {
+    self.window_offset..(self.window_offset + self.height as usize)
   }
 
   pub fn collapse(&mut self, index: usize) {

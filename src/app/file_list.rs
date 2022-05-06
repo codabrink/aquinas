@@ -15,8 +15,7 @@ pub fn render_file_list<'a, B: Backend>(
   frame: &mut Frame<B>,
   list_state: &mut ListState,
 ) {
-  let list_items: Vec<ListItem> = state.library.file_list()[state.list_offset
-    ..(state.list_offset + area.height as usize).min(state.library.file_list().len())]
+  let list_items: Vec<ListItem> = state.library.file_list()[state.view_range()]
     .into_iter()
     .map(|(node, depth)| render_list_item(state, node, *depth))
     .collect();
@@ -73,18 +72,18 @@ fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListIte
   })
 }
 
-pub fn handle_input<'a>(state: &'a mut App, list_state: &mut ListState, key: &KeyEvent) {
+pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
   let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
   match (key.code, ctrl) {
     (KeyCode::Right, _) | (KeyCode::Char('f'), true) => {
-      if let Some(i) = list_state.selected() {
-        state.expand(i + state.list_offset);
+      if let Some(selected) = state.selected {
+        state.expand(selected);
       }
     }
     (KeyCode::Left, _) | (KeyCode::Char('b'), true) => {
-      if let Some(i) = list_state.selected() {
-        state.collapse(i + state.list_offset);
+      if let Some(selected) = state.selected {
+        state.collapse(selected);
       }
     }
     (KeyCode::Char('f'), _) => {
@@ -101,7 +100,9 @@ pub fn handle_input<'a>(state: &'a mut App, list_state: &mut ListState, key: &Ke
       state.backend.seek_delta(-5);
     }
     (KeyCode::Enter, _) => {
-      state.play(state.list_index);
+      if let Some(selected) = state.selected {
+        state.play(selected);
+      }
     }
     (KeyCode::Char(' '), _) => state.backend.toggle(),
     (KeyCode::Char('d'), _) => state.focus = Focusable::Dir,
