@@ -13,7 +13,8 @@ pub use std::{
   time::Duration,
 };
 
-pub const SUPPORTED: &'static [&'static str] = &["mp3", "ogg", "opus", "flac", "wav"];
+pub const SUPPORTED: &'static [&'static str] =
+  &["mp3", "ogg", "opus", "flac", "wav", "webm", "mp4"];
 
 pub fn extension<'a>(path: &'a Path) -> Option<&'a str> {
   if let Some(ext) = path.extension() {

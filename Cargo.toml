@@ -1,11 +1,11 @@
 [package]
 name = "aquinas"
-version = "0.0.9"
+version = "0.0.10"
 license = "MPL-2.0"
 readme = "README.md"
 description = "A simple command line media player. (Like cmus, but simpler.)"
 categories = ["multimedia", "multimedia::audio"]
-keywords = ["audio", "multimedia", "media", "mediaplayer"]
+keywords = ["audio", "multimedia", "media", "mediaplayer", "music"]
 authors = ["Dakota Brink <git@kota.is>"]
 repository = "https://github.com/codabrink/aquinas"
 edition = "2021"
