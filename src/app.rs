@@ -119,7 +119,7 @@ impl App {
 
       if crossterm::event::poll(timeout)? {
         if let Event::Key(key) = event::read()? {
-          self.on_key(&key, &mut terminal, &mut list_state)?;
+          self.on_key(&key, &mut terminal)?;
         }
       }
 
@@ -132,7 +132,6 @@ impl App {
     &mut self,
     key: &KeyEvent,
     terminal: &mut Terminal<B>,
-    list_state: &mut ListState,
   ) -> Result<()> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
@@ -244,6 +243,7 @@ impl App {
         self.backend.pause();
       }
     }
+    self.message(AppMessage::Select(index));
   }
 
   pub fn play_path(&mut self, path: impl AsRef<Path>) {

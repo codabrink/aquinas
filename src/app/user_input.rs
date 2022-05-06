@@ -38,8 +38,6 @@ pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
   }
 
   if state.focus == Focusable::Search {
-    // reset selection
-
     state.message(AppMessage::Select(0));
     state.library.search(&state.input);
   }
