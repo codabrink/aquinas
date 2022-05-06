@@ -1,6 +1,6 @@
 [package]
 name = "aquinas"
-version = "0.0.10"
+version = "0.0.11"
 license = "MPL-2.0"
 readme = "README.md"
 description = "A simple command line media player. (Like cmus, but simpler.)"
