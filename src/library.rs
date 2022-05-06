@@ -18,7 +18,6 @@ pub struct Library {
   metadata: HashMap<PathBuf, Metadata>,
   shallow_list: FileList,
   list: FileList,
-  index: Vec<(String, usize)>,
   masked_list: FileList,
   query: String,
 }
@@ -36,7 +35,6 @@ impl Library {
       metadata: HashMap::new(),
       shallow_list: Vec::new(),
       query: String::new(),
-      index: Vec::new(),
       list: Vec::new(),
       masked_list: Vec::new(),
     };
@@ -82,14 +80,12 @@ impl Library {
   }
 
   pub fn search(&mut self, query: impl AsRef<str>) {
-    let query = query.as_ref();
-
+    self.query = searchify(query.as_ref());
     self.masked_list = Vec::new();
-    self.query = query.to_owned();
 
-    for (k, i) in &self.index {
-      if k.contains(query) {
-        self.masked_list.push(self.list[*i].clone());
+    for (node, depth) in &self.list {
+      if node.name_search.contains(&self.query) {
+        self.masked_list.push((node.clone(), *depth));
       }
     }
   }
@@ -173,6 +169,7 @@ pub struct Node {
   pub files: Option<Vec<Arc<Node>>>,
   pub folders: Option<Vec<PathBuf>>,
   name: String,
+  name_search: String,
 }
 
 impl Node {
@@ -256,11 +253,18 @@ impl Node {
     Arc::new(Self {
       path,
       metadata,
+      name_search: searchify(&name),
       name,
       files,
       folders,
     })
   }
+}
+
+fn searchify(key: &str) -> String {
+  key
+    .to_lowercase()
+    .replace(|c: char| !c.is_alphanumeric(), "")
 }
 
 impl Display for Node {

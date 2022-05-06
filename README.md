@@ -1,7 +1,5 @@
 This is a little media player written for myself.
 
-I really wish I had the time to make this something that I'm proud of, rather than the mess it is today. But for me, this is "good enough" for me for now and serves its purposes.
-
 # Aquinas Media Player
 
 A simple and straightforward terminal media player.
@@ -31,7 +29,8 @@ State of the interface.
 - [x] Change directories
 - [x] Seek forward / backward
 - [x] Gstreamer backend integration
-- [ ] Alternative backend integrations
+- [x] Alternative audio backends (Gstreamer, Rodio)
+  - [ ] Integrate [Symphonia](https://github.com/pdeljanov/Symphonia) backend
 - [x] Automatically play next song
 - [ ] Search
 - [x] Sorting / ordering (Basic)

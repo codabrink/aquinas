@@ -27,7 +27,7 @@ pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
     KeyCode::Backspace => {
       state.input.pop();
     }
-    KeyCode::Char('\n') => {
+    KeyCode::Enter => {
       process_cmd(state);
     }
     KeyCode::Char(c) => {
