@@ -34,12 +34,9 @@ dbus = { version = "0.9", optional = true }
 dbus-tree = { version = "0.9", optional = true }
 
 # metadata
-# mp3, flac
-audiotags = { vesion = "0.2", optional = true }
-# opus
-opus_headers = { version = "0.1", optional = true }
-# ogg
-lewton = { version = "0.10", optional = true }
+audiotags = { vesion = "0.2", optional = true }     # mp3, flac
+opus_headers = { version = "0.1", optional = true } # opus
+lewton = { version = "0.10", optional = true }      # ogg
 
 
 gstreamer = { version = "0.18", optional = true }
@@ -51,7 +48,7 @@ default = ["gstreamer_backend", "mpris"]
 gstreamer_backend = ["gstreamer", "gstreamer-player", "gstreamer-pbutils"]
 rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
 mpris = ["dbus", "dbus-tree"]
-# need to optimize this feature before enabling it
+# need to optimize this feature before enabling it by default
 metadata = ["audiotags", "opus_headers", "lewton"]
 
 
