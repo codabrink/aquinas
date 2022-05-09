@@ -16,8 +16,7 @@ pub use meta::Meta;
 pub use metadata::{get_metadata, Metadata};
 pub use prelude::*;
 
-#[tokio::main]
-async fn main() {
+fn main() {
   let mut app = app::App::new();
   let result = app.run_app();
   println!("{:?}", result);

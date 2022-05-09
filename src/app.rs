@@ -311,7 +311,7 @@ impl App {
 
   fn select(&mut self, index: usize, list_state: &mut ListState) {
     let height = self.height as usize - 1;
-    let index = index.min(self.library.file_list().len() - 1);
+    let index = index.min(self.library.file_list().len());
 
     self.selected = Some(index);
     self.window_offset = self
