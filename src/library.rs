@@ -26,11 +26,13 @@ pub struct Library {
   pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
-  _metadata: HashMap<PathBuf, Metadata>,
   shallow_list: FileList,
   list: FileList,
   masked_list: FileList,
   query: String,
+
+  #[cfg(feature = "metadata")]
+  _metadata: HashMap<PathBuf, Metadata>,
 }
 
 impl Library {
@@ -43,11 +45,13 @@ impl Library {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
-      _metadata: HashMap::new(),
       shallow_list: Vec::new(),
       query: String::new(),
       list: Vec::new(),
       masked_list: Vec::new(),
+
+      #[cfg(feature = "metadata")]
+      _metadata: HashMap::new(),
     };
 
     library.open_dirs.insert(root.path.clone());
@@ -180,12 +184,14 @@ impl<'a> Iterator for DirsIter<'a> {
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Node {
   pub path: PathBuf,
-  pub metadata: Option<Metadata>,
   pub files: Option<Vec<Arc<Node>>>,
   pub folders: Option<Vec<FolderKey>>,
   name: String,
   name_search: String,
   sort_key: String,
+
+  #[cfg(feature = "metadata")]
+  pub metadata: Option<Metadata>,
 }
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
@@ -211,6 +217,7 @@ impl Node {
     self.path.is_file()
   }
   pub fn title(&self) -> &str {
+    #[cfg(feature = "metadata")]
     if let Some(m) = &self.metadata {
       if let Some(t) = &m.title {
         return &t;
@@ -238,8 +245,8 @@ impl Node {
 
   pub fn new(path: impl AsRef<Path>) -> Arc<Self> {
     let path = path.as_ref().to_path_buf();
-    let metadata = None;
-    // let metadata = get_metadata(&path);
+    #[cfg(feature = "metadata")]
+    let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
 
     let (files, folders) = match path.is_dir() {
@@ -283,12 +290,14 @@ impl Node {
 
     Arc::new(Self {
       path,
-      metadata,
       name_search: searchify(&name),
       sort_key: name.to_lowercase(),
       name,
       files,
       folders,
+
+      #[cfg(feature = "metadata")]
+      metadata,
     })
   }
 }
