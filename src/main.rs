@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate lazy_static;
+
 mod app;
 mod backends;
 mod config;
@@ -5,18 +8,20 @@ mod config;
 mod duration;
 mod library;
 mod meta;
+#[cfg(feature = "metadata")]
 mod metadata;
+mod mpris;
 mod prelude;
 
 pub use backends::Backend as AudioBackend;
 pub use config::Config;
 pub use library::{Library, Node};
 pub use meta::Meta;
+#[cfg(feature = "metadata")]
 pub use metadata::{get_metadata, Metadata};
 pub use prelude::*;
 
-#[tokio::main]
-async fn main() {
+fn main() {
   let mut app = app::App::new();
   let result = app.run_app();
   println!("{:?}", result);

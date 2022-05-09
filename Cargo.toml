@@ -17,33 +17,39 @@ tui = "0.18"
 crossterm = "0.23"
 crossbeam-channel = "0.5"
 hashbrown = "0.12"
-tokio = { version = "1.17", features = ["full"] }
 parking_lot = "0.12"
+lazy_static = "1"
+atomic_enum = { git = "https://github.com/l1npengtul/atomic_enum.git" }
 toml = "0.5"
 serde = "1"
 serde_derive = "1"
 
-
+# rodio
 rodio = { version = "0.15", optional = true }
-
-# mp3, flac
-audiotags = "0.2"
-# mp3
 mp3-duration = { version = "0.1", optional = true }
-# opus
-opus_headers = "0.1"
-# ogg
-lewton = "0.10"
 ogg_metadata = { version = "0.4.1", optional = true }
+
+# mpris
+dbus = { version = "0.9", optional = true }
+dbus-tree = { version = "0.9", optional = true }
+
+# metadata
+audiotags = { vesion = "0.2", optional = true }     # mp3, flac
+opus_headers = { version = "0.1", optional = true } # opus
+lewton = { version = "0.10", optional = true }      # ogg
 
 gstreamer = { version = "0.18", optional = true }
 gstreamer-player = { version = "0.18", optional = true }
 gstreamer-pbutils = { version = "0.18", optional = true }
 
 [features]
-default = ["gstreamer_backend"]
+default = ["gstreamer_backend", "mpris"]
 gstreamer_backend = ["gstreamer", "gstreamer-player", "gstreamer-pbutils"]
 rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
+mpris = ["dbus", "dbus-tree"]
+# need to optimize this feature before enabling it by default
+metadata = ["audiotags", "opus_headers", "lewton"]
+
 
 [profile.release]
 strip = true

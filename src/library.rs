@@ -1,10 +1,21 @@
 use crate::*;
+use atomic_enum::atomic_enum;
 use core::fmt;
 use std::fmt::Display;
 
 type OpenDirs = HashSet<PathBuf>;
 type Dirs = HashMap<PathBuf, Arc<Node>>;
 type FileList = Vec<(Arc<Node>, usize)>;
+
+lazy_static! {
+  static ref SORT: AtomicSort = AtomicSort::new(Sort::Alphabetic);
+}
+
+#[atomic_enum]
+#[derive(PartialEq)]
+enum Sort {
+  Alphabetic,
+}
 
 enum MaybeNode {
   Node(Arc<Node>),
@@ -15,11 +26,13 @@ pub struct Library {
   pub root: Arc<Node>,
   pub dirs: Dirs,
   pub open_dirs: OpenDirs,
-  _metadata: HashMap<PathBuf, Metadata>,
   shallow_list: FileList,
   list: FileList,
   masked_list: FileList,
   query: String,
+
+  #[cfg(feature = "metadata")]
+  _metadata: HashMap<PathBuf, Metadata>,
 }
 
 impl Library {
@@ -32,11 +45,13 @@ impl Library {
       root: root.clone(),
       dirs,
       open_dirs: HashSet::new(),
-      _metadata: HashMap::new(),
       shallow_list: Vec::new(),
       query: String::new(),
       list: Vec::new(),
       masked_list: Vec::new(),
+
+      #[cfg(feature = "metadata")]
+      _metadata: HashMap::new(),
     };
 
     library.open_dirs.insert(root.path.clone());
@@ -169,11 +184,29 @@ impl<'a> Iterator for DirsIter<'a> {
 #[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 pub struct Node {
   pub path: PathBuf,
-  pub metadata: Option<Metadata>,
   pub files: Option<Vec<Arc<Node>>>,
-  pub folders: Option<Vec<PathBuf>>,
+  pub folders: Option<Vec<FolderKey>>,
   name: String,
   name_search: String,
+  sort_key: String,
+
+  #[cfg(feature = "metadata")]
+  pub metadata: Option<Metadata>,
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub struct FolderKey {
+  pub path: PathBuf,
+  sort_key: String,
+}
+
+impl From<PathBuf> for FolderKey {
+  fn from(path: PathBuf) -> Self {
+    Self {
+      sort_key: path.display().to_string().to_lowercase(),
+      path,
+    }
+  }
 }
 
 impl Node {
@@ -184,6 +217,7 @@ impl Node {
     self.path.is_file()
   }
   pub fn title(&self) -> &str {
+    #[cfg(feature = "metadata")]
     if let Some(m) = &self.metadata {
       if let Some(t) = &m.title {
         return &t;
@@ -198,9 +232,9 @@ impl Node {
       let files_len = files.len();
 
       return match index {
-        i if i < folders_len => match dirs.get(&folders[i]) {
+        i if i < folders_len => match dirs.get(&folders[i].path) {
           Some(node) => Some(MaybeNode::Node(node.clone())),
-          None => Some(MaybeNode::Path(folders[i].clone())),
+          None => Some(MaybeNode::Path(folders[i].path.clone())),
         },
         i if i < (files_len + folders_len) => Some(MaybeNode::Node(files[i - folders_len].clone())),
         _ => None,
@@ -211,14 +245,14 @@ impl Node {
 
   pub fn new(path: impl AsRef<Path>) -> Arc<Self> {
     let path = path.as_ref().to_path_buf();
-    let metadata = None;
-    // let metadata = get_metadata(&path);
+    #[cfg(feature = "metadata")]
+    let metadata = get_metadata(&path);
     let name = path.file_name().unwrap().to_string_lossy().to_string();
 
     let (files, folders) = match path.is_dir() {
       true => {
         let mut files = vec![];
-        let mut folders = vec![];
+        let mut folders: Vec<FolderKey> = vec![];
 
         if let Ok(paths) = fs::read_dir(&path) {
           for entry in paths {
@@ -229,7 +263,7 @@ impl Node {
               if let Some(name) = path.file_name() {
                 if let Some(name) = name.to_str() {
                   if name.chars().nth(0) != Some('.') {
-                    folders.push(path.clone());
+                    folders.push(path.into());
                   }
                 }
               }
@@ -246,8 +280,8 @@ impl Node {
           }
         }
 
-        files.sort_by(|a, b| a.path.partial_cmp(&b.path).unwrap());
-        folders.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        files.sort_by(|a, b| a.sort_key.partial_cmp(&b.sort_key).unwrap());
+        folders.sort_by(|a, b| a.sort_key.partial_cmp(&b.sort_key).unwrap());
 
         (Some(files), Some(folders))
       }
@@ -256,11 +290,14 @@ impl Node {
 
     Arc::new(Self {
       path,
-      metadata,
       name_search: searchify(&name),
+      sort_key: name.to_lowercase(),
       name,
       files,
       folders,
+
+      #[cfg(feature = "metadata")]
+      metadata,
     })
   }
 }
