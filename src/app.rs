@@ -1,11 +1,9 @@
 mod file_list;
 mod player_state;
 mod user_input;
-
-use crate::{
-  mpris::{build_metadata, PlaybackStatus},
-  *,
-};
+#[cfg(feature = "mpris")]
+use crate::mpris::{build_metadata, PlaybackStatus};
+use crate::*;
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use crossterm::{

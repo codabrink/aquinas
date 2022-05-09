@@ -7,6 +7,7 @@ mod library;
 mod meta;
 #[cfg(feature = "metadata")]
 mod metadata;
+#[cfg(feature = "mpris")]
 mod mpris;
 mod prelude;
 
