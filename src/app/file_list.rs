@@ -107,7 +107,7 @@ pub fn handle_input<'a>(state: &'a mut App, key: &KeyEvent) {
         state.play(selected);
       }
     }
-    (KeyCode::Char(' '), _) => state.backend.toggle(),
+    (KeyCode::Char(' '), _) => state.backend.play_pause(),
     (KeyCode::Char('d'), _) => state.focus = Focusable::Dir,
     (KeyCode::Char('s'), _) => state.focus = Focusable::Search,
     _ => {}

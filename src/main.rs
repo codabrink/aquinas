@@ -6,6 +6,7 @@ mod duration;
 mod library;
 mod meta;
 mod metadata;
+mod mpris;
 mod prelude;
 
 pub use backends::Backend as AudioBackend;

@@ -22,11 +22,11 @@ pub trait Backend {
   fn duration(path: &Path) -> u64
   where
     Self: Sized;
-  fn play(&mut self, path: &Path);
+  fn play(&mut self, path: Option<&Path>);
   fn pause(&mut self);
   fn is_paused(&self) -> bool;
   fn last_played(&self) -> Option<&PathBuf>;
-  fn toggle(&mut self);
+  fn play_pause(&mut self);
   fn seek(&mut self, time: u64);
   fn seek_delta(&mut self, delta_time: i64);
   fn progress(&self) -> (f64, u64, u64); // (pct, pos, dur)

@@ -23,8 +23,11 @@ toml = "0.5"
 serde = "1"
 serde_derive = "1"
 
-
 rodio = { version = "0.15", optional = true }
+
+# mpris
+dbus = { version = "0.9", optional = true }
+dbus-tree = { version = "0.9", optional = true }
 
 # mp3, flac
 audiotags = "0.2"
@@ -41,9 +44,11 @@ gstreamer-player = { version = "0.18", optional = true }
 gstreamer-pbutils = { version = "0.18", optional = true }
 
 [features]
-default = ["gstreamer_backend"]
+default = ["gstreamer_backend", "mpris"]
 gstreamer_backend = ["gstreamer", "gstreamer-player", "gstreamer-pbutils"]
 rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
+mpris = ["dbus", "dbus-tree"]
+
 
 [profile.release]
 strip = true

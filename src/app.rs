@@ -33,6 +33,11 @@ pub enum Focusable {
 pub enum AppMessage {
   Select(usize),
   SelectDelta(i64),
+  Play(Option<PathBuf>),
+  Pause,
+  PlayPause,
+  Next,
+  Prev,
 }
 
 pub struct App {
@@ -46,7 +51,7 @@ pub struct App {
   pub progress: (f64, u64, u64),
   pub playing: Option<Arc<Node>>,
   pub play_index: usize,
-  mailbox: (Sender<AppMessage>, Receiver<AppMessage>),
+  mailbox: (Arc<Sender<AppMessage>>, Receiver<AppMessage>),
 }
 
 impl App {
@@ -56,7 +61,15 @@ impl App {
 
     let progress = backend.progress();
 
-    let mailbox = crossbeam_channel::unbounded();
+    let (sender, receiver) = crossbeam_channel::unbounded();
+    let sender = Arc::new(sender);
+
+    std::thread::spawn({
+      let mailbox = sender.clone();
+      move || {
+        let _ = mpris::run_dbus_server(mailbox);
+      }
+    });
 
     let mut app = Self {
       backend,
@@ -69,7 +82,7 @@ impl App {
       window_offset: 0,
       progress,
       play_index: 0,
-      mailbox,
+      mailbox: (sender, receiver),
     };
     // app.set_root(&path);
 
@@ -137,6 +150,8 @@ impl App {
     key: &KeyEvent,
     terminal: &mut Terminal<B>,
   ) -> Result<()> {
+    use AppMessage::*;
+
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
 
@@ -151,16 +166,16 @@ impl App {
         std::process::exit(0);
       }
       (KeyCode::Down, _, _) | (KeyCode::Char('n'), true, _) => {
-        self.message(AppMessage::SelectDelta(1));
+        self.message(SelectDelta(1));
       }
       (KeyCode::Up, _, _) | (KeyCode::Char('p'), true, _) => {
-        self.message(AppMessage::SelectDelta(-1));
+        self.message(SelectDelta(-1));
       }
       (KeyCode::Char('v'), true, _) => {
-        self.message(AppMessage::SelectDelta(10));
+        self.message(SelectDelta(10));
       }
       (KeyCode::Char('v'), _, true) => {
-        self.message(AppMessage::SelectDelta(-10));
+        self.message(SelectDelta(-10));
       }
       _ => match self.focus {
         Focusable::FileList => file_list::handle_input(self, key),
@@ -210,6 +225,8 @@ impl App {
   }
 
   fn update(&mut self, list_state: &mut ListState) -> Result<()> {
+    use AppMessage::*;
+
     self.progress = self.backend.progress();
 
     self.ensure_continue();
@@ -217,13 +234,18 @@ impl App {
     let messages: Vec<AppMessage> = self.mailbox.1.try_iter().collect();
     for msg in messages {
       match msg {
-        AppMessage::Select(index) => {
+        Select(index) => {
           self.select(index, list_state);
         }
-        AppMessage::SelectDelta(delta) => {
+        SelectDelta(delta) => {
           let index = self.selected.unwrap_or(0) as i64 + delta;
           self.select(index.max(0) as usize, list_state);
         }
+        Play(path) => self.backend.play(None),
+        PlayPause => self.backend.play_pause(),
+        Pause => self.backend.pause(),
+        Next => self.play(self.play_index + 1),
+        Prev => self.play(self.play_index.saturating_sub(1)),
       }
     }
 
@@ -244,7 +266,7 @@ impl App {
     match self.library.file_list().get(index) {
       Some((node, _)) => {
         if node.is_file() {
-          self.backend.play(&node.path);
+          self.backend.play(Some(&node.path));
           return;
         }
         self.expand(index);

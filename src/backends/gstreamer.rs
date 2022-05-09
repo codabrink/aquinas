@@ -80,12 +80,14 @@ impl super::Backend for GStreamer {
   // result
   // }
 
-  fn play(&mut self, path: &Path) {
-    self
-      .player
-      .set_uri(Some(&format!("file:///{}", path.display())));
+  fn play(&mut self, path: Option<&Path>) {
+    if let Some(path) = path {
+      self
+        .player
+        .set_uri(Some(&format!("file:///{}", path.display())));
+      self.last_played = Some(path.to_owned());
+    }
     self.player.play();
-    self.last_played = Some(path.to_owned());
     self.paused = false;
   }
   fn pause(&mut self) {
@@ -96,7 +98,7 @@ impl super::Backend for GStreamer {
     self.paused
   }
 
-  fn toggle(&mut self) {
+  fn play_pause(&mut self) {
     match self.paused {
       true => self.player.play(),
       false => self.player.pause(),
