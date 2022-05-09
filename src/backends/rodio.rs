@@ -60,19 +60,18 @@ impl super::Backend for Rodio {
     crate::duration::duration(path).unwrap_or(0)
   }
 
-  fn play(&mut self, path: &Path) {
-    if let Some(source) = Self::create_source(path) {
-      self.playing = Some(path.to_path_buf());
-      let controls = self.controls.clone();
-      let seek = self.controls.seek.swap(0, Ordering::SeqCst);
+  fn play(&mut self, path: Option<&Path>) {
+    if let Some(path) = path {
+      if let Some(source) = Self::create_source(path) {
+        self.playing = Some(path.to_path_buf());
+        let controls = self.controls.clone();
+        let seek = self.controls.seek.swap(0, Ordering::SeqCst);
 
-      let playing_index = controls.playing_index.fetch_add(1, Ordering::SeqCst) + 1;
+        let playing_index = controls.playing_index.fetch_add(1, Ordering::SeqCst) + 1;
 
-      let source =
-        source
-          .pausable(false)
-          .stoppable()
-          .periodic_access(Duration::from_millis(5), move |src| {
+        let source = source.pausable(false).stoppable().periodic_access(
+          Duration::from_millis(5),
+          move |src| {
             if playing_index != controls.playing_index.load(Ordering::SeqCst) {
               src.stop();
             }
@@ -91,19 +90,23 @@ impl super::Backend for Rodio {
               (false, None) => *cursor_instant = Some(Instant::now()),
               _ => {}
             };
-          });
+          },
+        );
 
-      let samples = source
-        .skip_duration(Duration::from_secs(seek))
-        .convert_samples();
+        let samples = source
+          .skip_duration(Duration::from_secs(seek))
+          .convert_samples();
 
-      {
-        *self.controls.cursor_instant.lock() = Some(Instant::now());
-        *self.controls.cursor_elapsed.lock() = Duration::from_secs(seek);
-        self.playing_duration = Self::duration(path);
+        {
+          *self.controls.cursor_instant.lock() = Some(Instant::now());
+          *self.controls.cursor_elapsed.lock() = Duration::from_secs(seek);
+          self.playing_duration = Self::duration(path);
+        }
+
+        let _ = self.stream.play_raw(samples);
       }
-
-      let _ = self.stream.play_raw(samples);
+    } else {
+      self.controls.paused.store(false, Ordering::SeqCst);
     }
   }
 
@@ -115,7 +118,7 @@ impl super::Backend for Rodio {
     self.controls.paused.load(Ordering::SeqCst)
   }
 
-  fn toggle(&mut self) {
+  fn play_pause(&mut self) {
     self.controls.paused.swap(
       !self.controls.paused.load(Ordering::SeqCst),
       Ordering::SeqCst,
@@ -126,7 +129,7 @@ impl super::Backend for Rodio {
     if let Some(playing_path) = &self.playing {
       self.controls.seek.store(time, Ordering::SeqCst);
       let playing_path = playing_path.clone();
-      self.play(&playing_path);
+      self.play(Some(&playing_path));
     }
   }
 
