@@ -1,16 +1,31 @@
 use crate::app::AppMessage;
 use crate::*;
-use crossbeam_channel::Sender;
 use dbus::arg::{RefArg, Variant};
 use dbus::ffidisp::stdintf::org_freedesktop_dbus::PropertiesPropertiesChanged;
 use dbus::message::SignalArgs;
 use dbus::strings::Path;
 use dbus_tree::{Access, Factory};
-use std::{collections::HashMap, rc::Rc, time::Duration};
+use std::{collections::HashMap, rc::Rc};
 
 type Metadata = HashMap<String, Variant<Box<dyn RefArg>>>;
 
-pub fn run_dbus_server(mailbox: Arc<Sender<AppMessage>>) -> Rc<dbus::ffidisp::Connection> {
+pub enum PlaybackStatus {
+  Playing(Option<Metadata>),
+  Paused,
+}
+
+pub fn build_metadata(node: &Arc<Node>) -> Metadata {
+  let mut metadata: Metadata = HashMap::new();
+
+  metadata.insert(
+    "xesam:title".to_string(),
+    Variant(Box::new(node.title().to_string())),
+  );
+
+  metadata
+}
+
+pub fn run_dbus_server(mailbox: Arc<Sender<AppMessage>>, play_status: Receiver<PlaybackStatus>) {
   let conn = Rc::new(
     dbus::ffidisp::Connection::get_private(dbus::ffidisp::BusType::Session)
       .expect("Failed to connect to dbus"),
@@ -136,7 +151,7 @@ pub fn run_dbus_server(mailbox: Arc<Sender<AppMessage>>) -> Rc<dbus::ffidisp::Co
         i.append(0.0);
         Ok(())
       })
-      .on_set(move |i, _| Ok(()))
+      .on_set(move |_iter, _| Ok(()))
   };
 
   let property_rate = f
@@ -218,7 +233,7 @@ pub fn run_dbus_server(mailbox: Arc<Sender<AppMessage>>) -> Rc<dbus::ffidisp::Co
         iter.append(false);
         Ok(())
       })
-      .on_set(move |iter, _| Ok(()))
+      .on_set(move |_iter, _| Ok(()))
   };
 
   let property_cangoforward = f
@@ -337,31 +352,34 @@ pub fn run_dbus_server(mailbox: Arc<Sender<AppMessage>>) -> Rc<dbus::ffidisp::Co
 
   conn.add_handler(tree);
 
-  let mut changed: PropertiesPropertiesChanged = Default::default();
-  changed.interface_name = "org.mpris.MediaPlayer2.Player".to_string();
-  changed.changed_properties.insert(
-    String::from("PlaybackStatus"),
-    Variant(Box::new("Playing".to_string())),
-  );
-
-  let metadata: HashMap<String, Variant<Box<dyn RefArg>>> = HashMap::new();
-  changed
-    .changed_properties
-    .insert("Metadata".to_string(), Variant(Box::new(metadata)));
-
-  conn
-    .send(changed.to_emit_message(&Path::new("/org/mpris/MediaPlayer2".to_string()).unwrap()))
-    .unwrap();
-
-  // panic!("here?");
-
   loop {
-    if let Some(m) = conn.incoming(200).next() {
+    if let Some(_m) = conn.incoming(200).next() {
       // warn!("Unhandled dbus message: {:?}", m);
     }
 
-    // std::thread::sleep(Duration::from_secs(1));
-  }
+    for playback_status in play_status.try_iter() {
+      let mut changed: PropertiesPropertiesChanged = Default::default();
+      changed.interface_name = "org.mpris.MediaPlayer2.Player".to_string();
 
-  conn
+      let status = match playback_status {
+        PlaybackStatus::Playing(_) => "Playing",
+        PlaybackStatus::Paused => "Paused",
+      }
+      .to_string();
+
+      changed
+        .changed_properties
+        .insert(String::from("PlaybackStatus"), Variant(Box::new(status)));
+
+      if let PlaybackStatus::Playing(Some(metadata)) = playback_status {
+        changed
+          .changed_properties
+          .insert("Metadata".to_string(), Variant(Box::new(metadata)));
+      }
+
+      conn
+        .send(changed.to_emit_message(&Path::new("/org/mpris/MediaPlayer2".to_string()).unwrap()))
+        .unwrap();
+    }
+  }
 }

@@ -2,7 +2,10 @@ mod file_list;
 mod player_state;
 mod user_input;
 
-use crate::*;
+use crate::{
+  mpris::{build_metadata, PlaybackStatus},
+  *,
+};
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
 use crossterm::{
@@ -52,6 +55,10 @@ pub struct App {
   pub playing: Option<Arc<Node>>,
   pub play_index: usize,
   mailbox: (Arc<Sender<AppMessage>>, Receiver<AppMessage>),
+  last_played: Option<Arc<Node>>,
+
+  #[cfg(feature = "mpris")]
+  mpris_tx: Sender<PlaybackStatus>,
 }
 
 impl App {
@@ -64,12 +71,17 @@ impl App {
     let (sender, receiver) = crossbeam_channel::unbounded();
     let sender = Arc::new(sender);
 
-    std::thread::spawn({
+    #[cfg(feature = "mpris")]
+    let mpris_tx = {
+      let (mpris_tx, mpris_rx) = crossbeam_channel::unbounded();
       let mailbox = sender.clone();
-      move || {
-        let _ = mpris::run_dbus_server(mailbox);
-      }
-    });
+
+      std::thread::spawn(move || {
+        let _ = mpris::run_dbus_server(mailbox, mpris_rx);
+      });
+
+      mpris_tx
+    };
 
     let mut app = Self {
       backend,
@@ -83,6 +95,10 @@ impl App {
       progress,
       play_index: 0,
       mailbox: (sender, receiver),
+      last_played: None,
+
+      #[cfg(feature = "mpris")]
+      mpris_tx,
     };
     // app.set_root(&path);
 
@@ -241,7 +257,7 @@ impl App {
           let index = self.selected.unwrap_or(0) as i64 + delta;
           self.select(index.max(0) as usize, list_state);
         }
-        Play(path) => self.backend.play(None),
+        Play(_path) => self.backend.play(None),
         PlayPause => self.backend.play_pause(),
         Pause => self.backend.pause(),
         Next => self.play(self.play_index + 1),
@@ -266,14 +282,23 @@ impl App {
     match self.library.file_list().get(index) {
       Some((node, _)) => {
         if node.is_file() {
+          #[cfg(feature = "mpris")]
+          {
+            let _ = self
+              .mpris_tx
+              .send(PlaybackStatus::Playing(Some(build_metadata(node))));
+          }
+
+          self.last_played = Some(node.clone());
           self.backend.play(Some(&node.path));
           return;
         }
+
         self.expand(index);
         self.play(index + 1);
       }
       None => {
-        self.backend.pause();
+        self.pause();
       }
     }
     self.message(AppMessage::Select(index));
@@ -307,6 +332,25 @@ impl App {
     if let Some(index) = index {
       self.play(index);
     }
+  }
+
+  pub fn pause(&mut self) {
+    self.backend.pause();
+
+    #[cfg(feature = "mpris")]
+    let _ = self.mpris_tx.send(PlaybackStatus::Paused);
+  }
+
+  pub fn play_pause(&mut self) {
+    self.backend.play_pause();
+
+    #[cfg(feature = "mpris")]
+    let _ = match self.backend.is_paused() {
+      true => self.mpris_tx.send(PlaybackStatus::Paused),
+      false => self.mpris_tx.send(PlaybackStatus::Playing(
+        self.last_played.as_ref().map(|lp| build_metadata(&lp)),
+      )),
+    };
   }
 
   fn select(&mut self, index: usize, list_state: &mut ListState) {
