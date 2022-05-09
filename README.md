@@ -35,10 +35,11 @@ State of the interface.
 - [x] Search
 - [x] Sorting / ordering (Basic)
   - [ ] Advanced sorting / ordering
+- [x] Global media keys (mpris)
 - [ ] Now playing info
 - [ ] Help info
-- [ ] Song metadata
-- [ ] Global media keys (mpris)
+- [ ] Song metadata (disabled temporarily)
+
 
 
 Installation

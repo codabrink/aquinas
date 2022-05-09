@@ -1,10 +1,21 @@
 use crate::*;
+use atomic_enum::atomic_enum;
 use core::fmt;
 use std::fmt::Display;
 
 type OpenDirs = HashSet<PathBuf>;
 type Dirs = HashMap<PathBuf, Arc<Node>>;
 type FileList = Vec<(Arc<Node>, usize)>;
+
+lazy_static! {
+  static ref SORT: AtomicSort = AtomicSort::new(Sort::Alphabetic);
+}
+
+#[atomic_enum]
+#[derive(PartialEq)]
+enum Sort {
+  Alphabetic,
+}
 
 enum MaybeNode {
   Node(Arc<Node>),
@@ -171,9 +182,25 @@ pub struct Node {
   pub path: PathBuf,
   pub metadata: Option<Metadata>,
   pub files: Option<Vec<Arc<Node>>>,
-  pub folders: Option<Vec<PathBuf>>,
+  pub folders: Option<Vec<FolderKey>>,
   name: String,
   name_search: String,
+  sort_key: String,
+}
+
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
+pub struct FolderKey {
+  pub path: PathBuf,
+  sort_key: String,
+}
+
+impl From<PathBuf> for FolderKey {
+  fn from(path: PathBuf) -> Self {
+    Self {
+      sort_key: path.display().to_string().to_lowercase(),
+      path,
+    }
+  }
 }
 
 impl Node {
@@ -198,9 +225,9 @@ impl Node {
       let files_len = files.len();
 
       return match index {
-        i if i < folders_len => match dirs.get(&folders[i]) {
+        i if i < folders_len => match dirs.get(&folders[i].path) {
           Some(node) => Some(MaybeNode::Node(node.clone())),
-          None => Some(MaybeNode::Path(folders[i].clone())),
+          None => Some(MaybeNode::Path(folders[i].path.clone())),
         },
         i if i < (files_len + folders_len) => Some(MaybeNode::Node(files[i - folders_len].clone())),
         _ => None,
@@ -218,7 +245,7 @@ impl Node {
     let (files, folders) = match path.is_dir() {
       true => {
         let mut files = vec![];
-        let mut folders = vec![];
+        let mut folders: Vec<FolderKey> = vec![];
 
         if let Ok(paths) = fs::read_dir(&path) {
           for entry in paths {
@@ -229,7 +256,7 @@ impl Node {
               if let Some(name) = path.file_name() {
                 if let Some(name) = name.to_str() {
                   if name.chars().nth(0) != Some('.') {
-                    folders.push(path.clone());
+                    folders.push(path.into());
                   }
                 }
               }
@@ -246,8 +273,8 @@ impl Node {
           }
         }
 
-        files.sort_by(|a, b| a.path.partial_cmp(&b.path).unwrap());
-        folders.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        files.sort_by(|a, b| a.sort_key.partial_cmp(&b.sort_key).unwrap());
+        folders.sort_by(|a, b| a.sort_key.partial_cmp(&b.sort_key).unwrap());
 
         (Some(files), Some(folders))
       }
@@ -258,6 +285,7 @@ impl Node {
       path,
       metadata,
       name_search: searchify(&name),
+      sort_key: name.to_lowercase(),
       name,
       files,
       folders,

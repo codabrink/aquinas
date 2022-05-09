@@ -19,6 +19,8 @@ crossbeam-channel = "0.5"
 hashbrown = "0.12"
 tokio = { version = "1.17", features = ["full"] }
 parking_lot = "0.12"
+lazy_static = "1"
+atomic_enum = { git = "https://github.com/l1npengtul/atomic_enum.git" }
 toml = "0.5"
 serde = "1"
 serde_derive = "1"
