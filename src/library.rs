@@ -1,21 +1,10 @@
 use crate::*;
-use atomic_enum::atomic_enum;
 use core::fmt;
 use std::fmt::Display;
 
 type OpenDirs = HashSet<PathBuf>;
 type Dirs = HashMap<PathBuf, Arc<Node>>;
 type FileList = Vec<(Arc<Node>, usize)>;
-
-lazy_static! {
-  static ref SORT: AtomicSort = AtomicSort::new(Sort::Alphabetic);
-}
-
-#[atomic_enum]
-#[derive(PartialEq)]
-enum Sort {
-  Alphabetic,
-}
 
 enum MaybeNode {
   Node(Arc<Node>),

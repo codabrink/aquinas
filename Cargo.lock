@@ -49,10 +49,9 @@ checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "aquinas"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
- "atomic_enum",
  "audiotags",
  "crossbeam-channel",
  "crossterm",
@@ -63,7 +62,6 @@ dependencies = [
  "gstreamer-pbutils",
  "gstreamer-player",
  "hashbrown",
- "lazy_static",
  "lewton",
  "mp3-duration",
  "ogg_metadata",
@@ -74,16 +72,6 @@ dependencies = [
  "serde_derive",
  "toml",
  "tui",
-]
-
-[[package]]
-name = "atomic_enum"
-version = "0.2.0"
-source = "git+https://github.com/l1npengtul/atomic_enum.git#a269d7f20f5ae477f6fa129b4dcbe9b1e0306ec3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
