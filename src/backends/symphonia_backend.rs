@@ -148,7 +148,7 @@ impl super::Backend for Symphonia {
 
           let packet = match reader.next_packet() {
             Ok(packet) => packet,
-            Err(err) => break,
+            Err(_) => break,
           };
 
           if packet.track_id() != track_id {
@@ -294,7 +294,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
       move |_| {},
     )?;
 
-    stream.play();
+    stream.play()?;
 
     Ok(Box::new(Self {
       ring_buf_tx,
