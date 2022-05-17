@@ -1,24 +1,23 @@
 use anyhow::{bail, Result};
-use cpal::traits::StreamTrait;
-use cpal::traits::{DeviceTrait, HostTrait};
-use cpal::{BufferSize, SampleRate, StreamConfig};
+use cpal::{
+  traits::{DeviceTrait, HostTrait, StreamTrait},
+  BufferSize, SampleRate, StreamConfig,
+};
 use rb::*;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::{self, Instant};
 use std::{
   fs::File,
   path::{Path, PathBuf},
+  sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+  sync::Arc,
   thread,
+  time::{self, Instant},
 };
-use symphonia::core::audio::{RawSample, SignalSpec};
-use symphonia::core::conv::ConvertibleSample;
-use symphonia::core::formats::{FormatReader, Track};
 use symphonia::core::{
-  audio::{AudioBufferRef, SampleBuffer},
+  audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec},
   codecs::{DecoderOptions, CODEC_TYPE_NULL},
+  conv::ConvertibleSample,
   errors::Error,
-  formats::FormatOptions,
+  formats::{FormatOptions, FormatReader, Track},
   io::MediaSourceStream,
   meta::MetadataOptions,
   probe::Hint,
