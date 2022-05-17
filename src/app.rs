@@ -255,7 +255,7 @@ impl App {
           let index = self.selected.unwrap_or(0) as i64 + delta;
           self.select(index.max(0) as usize, list_state);
         }
-        Play(_path) => self.backend.play(None),
+        Play(_path) => self.backend.play(None)?,
         PlayPause => self.backend.play_pause(),
         Pause => self.backend.pause(),
         Next => self.play(self.play_index + 1),

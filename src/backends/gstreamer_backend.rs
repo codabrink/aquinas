@@ -1,32 +1,10 @@
+use anyhow::Result;
 use gst::ClockTime;
 use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_pbutils as gst_pbutils;
 use gstreamer_player as gst_player;
 use std::path::{Path, PathBuf};
-/**
- * MIT License
- *
- * termusic - Copyright (c) 2021 Larry Hao
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
 
 pub struct GStreamer {
   player: gst_player::Player,
@@ -65,22 +43,7 @@ impl super::Backend for GStreamer {
     0
   }
 
-  // fn tags(&self, path: &Path) -> Vec<String> {
-  // let timeout = ClockTime::from_seconds(1);
-  // let mut result = vec![];
-  // if let Ok(discoverer) = gst_pbutils::Discoverer::new(timeout) {
-  // if let Ok(info) = discoverer.discover_uri(&format!("file:///{}", path.display())) {
-  // if let Some(t) = info.tags() {
-  // for (name, _) in t.iter() {
-  // result.push(name.to_owned());
-  // }
-  // }
-  // }
-  // }
-  // result
-  // }
-
-  fn play(&mut self, path: Option<&Path>) {
+  fn play(&mut self, path: Option<&Path>) -> Result<()> {
     if let Some(path) = path {
       self
         .player
@@ -89,6 +52,7 @@ impl super::Backend for GStreamer {
     }
     self.player.play();
     self.paused = false;
+    Ok(())
   }
   fn pause(&mut self) {
     self.player.pause();
