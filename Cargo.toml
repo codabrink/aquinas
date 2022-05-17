@@ -1,6 +1,6 @@
 [package]
 name = "aquinas"
-version = "0.0.15"
+version = "0.0.16"
 license = "MPL-2.0"
 readme = "README.md"
 description = "A simple command line media player. (Like cmus, but simpler.)"
@@ -21,7 +21,6 @@ parking_lot = "0.12"
 toml = "0.5"
 serde = "1"
 serde_derive = "1"
-
 
 # rodio
 rodio = { version = "0.15", optional = true }
