@@ -23,9 +23,7 @@ pub trait Backend {
   fn new() -> Self
   where
     Self: Sized;
-  fn duration(path: &Path) -> u64
-  where
-    Self: Sized;
+  fn track_finished(&self) -> bool;
   fn play(&mut self, path: Option<&Path>) -> anyhow::Result<()>;
   fn pause(&mut self);
   fn is_paused(&self) -> bool;

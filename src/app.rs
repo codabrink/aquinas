@@ -381,11 +381,10 @@ impl App {
     }
   }
 
+  #[inline]
   fn ensure_continue(&mut self) {
-    if self.progress.2 == 0 || self.progress.1 != self.progress.2 || self.backend.is_paused() {
-      return;
+    if self.backend.track_finished() {
+      self.play(self.play_index + 1);
     }
-
-    self.play(self.play_index + 1);
   }
 }

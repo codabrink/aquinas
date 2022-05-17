@@ -3,9 +3,7 @@ use cpal::traits::StreamTrait;
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{BufferSize, SampleRate, StreamConfig};
 use rb::*;
-use symphonia::core::formats::{FormatReader, Track};
-
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{self, Instant};
 use std::{
@@ -15,7 +13,7 @@ use std::{
 };
 use symphonia::core::audio::{RawSample, SignalSpec};
 use symphonia::core::conv::ConvertibleSample;
-use symphonia::core::units::Duration;
+use symphonia::core::formats::{FormatReader, Track};
 use symphonia::core::{
   audio::{AudioBufferRef, SampleBuffer},
   codecs::{DecoderOptions, CODEC_TYPE_NULL},
@@ -24,6 +22,7 @@ use symphonia::core::{
   io::MediaSourceStream,
   meta::MetadataOptions,
   probe::Hint,
+  units::{Duration, Time},
 };
 
 trait AudioOutputSample:
@@ -45,6 +44,8 @@ pub struct Symphonia {
 struct Controls {
   position: AtomicU64,
   is_paused: AtomicBool,
+  track_finished: AtomicBool,
+  seek_to: AtomicU32,
 }
 
 trait SymphoniaReader {
@@ -63,11 +64,13 @@ impl SymphoniaReader for Box<dyn FormatReader> {
 impl Symphonia {
   fn get_reader(path: &Path) -> Result<Box<dyn FormatReader>> {
     let src = File::open(path)?;
+
     let mss = MediaSourceStream::new(Box::new(src), Default::default());
     let hint = Hint::new();
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
     let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
+
     Ok(probed.format)
   }
 }
@@ -132,9 +135,20 @@ impl super::Backend for Symphonia {
             thread::sleep(time::Duration::from_millis(200));
           }
 
+          let seek_to = controls.seek_to.swap(0, Ordering::SeqCst);
+          if seek_to != 0 {
+            let _ = reader.seek(
+              symphonia::core::formats::SeekMode::Accurate,
+              symphonia::core::formats::SeekTo::Time {
+                time: Time::from(seek_to),
+                track_id: None,
+              },
+            );
+          }
+
           let packet = match reader.next_packet() {
             Ok(packet) => packet,
-            Err(err) => bail!("{}", err),
+            Err(err) => break,
           };
 
           if packet.track_id() != track_id {
@@ -174,17 +188,15 @@ impl super::Backend for Symphonia {
           }
         }
 
-        Ok(())
+        controls.track_finished.store(true, Ordering::SeqCst);
       });
     }
 
     Ok(())
   }
-  fn duration(path: &Path) -> u64
-  where
-    Self: Sized,
-  {
-    100
+
+  fn track_finished(&self) -> bool {
+    self.controls.track_finished.load(Ordering::Relaxed)
   }
 
   fn is_paused(&self) -> bool {
@@ -208,8 +220,14 @@ impl super::Backend for Symphonia {
     ((position as f64 / duration as f64), position, duration)
   }
 
-  fn seek(&mut self, time: u64) {}
-  fn seek_delta(&mut self, delta_time: i64) {}
+  fn seek(&mut self, time: u64) {
+    self.controls.position.store(time, Ordering::SeqCst);
+    self.controls.seek_to.store(time as u32, Ordering::SeqCst);
+  }
+  fn seek_delta(&mut self, delta_time: i64) {
+    let position = self.controls.position.load(Ordering::Relaxed) as i64;
+    self.seek(position.saturating_add(delta_time) as u64);
+  }
 }
 
 struct CpalAudioOutputImpl<T: AudioOutputSample>
