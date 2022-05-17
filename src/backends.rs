@@ -1,7 +1,9 @@
 #[cfg(feature = "gstreamer_backend")]
-mod gstreamer;
+mod gstreamer_backend;
 #[cfg(feature = "rodio_backend")]
-mod rodio;
+mod rodio_backend;
+#[cfg(feature = "symphonia_backend")]
+mod symphonia_backend;
 
 use std::boxed::Box;
 use std::path::{Path, PathBuf};
@@ -9,20 +11,20 @@ use std::path::{Path, PathBuf};
 pub fn load() -> Box<dyn Backend> {
   // in the future this will be configurable,
   // but for now we only have one backend.
+  #[cfg(feature = "gstreamer_backend")]
+  return Box::new(gstreamer_backend::GStreamer::new());
+  #[cfg(feature = "symphonia_backend")]
+  return Box::new(symphonia_backend::Symphonia::new());
   #[cfg(feature = "rodio_backend")]
   return Box::new(rodio::Rodio::new());
-  #[cfg(feature = "gstreamer_backend")]
-  return Box::new(gstreamer::GStreamer::new());
 }
 
 pub trait Backend {
   fn new() -> Self
   where
     Self: Sized;
-  fn duration(path: &Path) -> u64
-  where
-    Self: Sized;
-  fn play(&mut self, path: Option<&Path>);
+  fn track_finished(&self) -> bool;
+  fn play(&mut self, path: Option<&Path>) -> anyhow::Result<()>;
   fn pause(&mut self);
   fn is_paused(&self) -> bool;
   fn last_played(&self) -> Option<&PathBuf>;

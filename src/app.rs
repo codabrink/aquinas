@@ -255,7 +255,7 @@ impl App {
           let index = self.selected.unwrap_or(0) as i64 + delta;
           self.select(index.max(0) as usize, list_state);
         }
-        Play(_path) => self.backend.play(None),
+        Play(_path) => self.backend.play(None)?,
         PlayPause => self.backend.play_pause(),
         Pause => self.backend.pause(),
         Next => self.play(self.play_index + 1),
@@ -288,7 +288,7 @@ impl App {
           }
 
           self.last_played = Some(node.clone());
-          self.backend.play(Some(&node.path));
+          let _ = self.backend.play(Some(&node.path));
           return;
         }
 
@@ -352,7 +352,7 @@ impl App {
   }
 
   fn select(&mut self, index: usize, list_state: &mut ListState) {
-    let height = self.height as usize - 1;
+    let height = (self.height as usize).saturating_sub(1);
     let index = index.min(self.library.file_list().len());
 
     self.selected = Some(index);
@@ -381,11 +381,10 @@ impl App {
     }
   }
 
+  #[inline]
   fn ensure_continue(&mut self) {
-    if self.progress.2 == 0 || self.progress.1 != self.progress.2 || self.backend.is_paused() {
-      return;
+    if self.backend.track_finished() {
+      self.play(self.play_index + 1);
     }
-
-    self.play(self.play_index + 1);
   }
 }
