@@ -11,12 +11,12 @@ use std::path::{Path, PathBuf};
 pub fn load() -> Box<dyn Backend> {
   // in the future this will be configurable,
   // but for now we only have one backend.
+  #[cfg(feature = "gstreamer_backend")]
+  return Box::new(gstreamer_backend::GStreamer::new());
   #[cfg(feature = "symphonia_backend")]
   return Box::new(symphonia_backend::Symphonia::new());
   #[cfg(feature = "rodio_backend")]
   return Box::new(rodio::Rodio::new());
-  #[cfg(feature = "gstreamer_backend")]
-  return Box::new(gstreamer_backend::GStreamer::new());
 }
 
 pub trait Backend {

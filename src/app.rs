@@ -288,7 +288,7 @@ impl App {
           }
 
           self.last_played = Some(node.clone());
-          self.backend.play(Some(&node.path));
+          let _ = self.backend.play(Some(&node.path));
           return;
         }
 
@@ -352,7 +352,7 @@ impl App {
   }
 
   fn select(&mut self, index: usize, list_state: &mut ListState) {
-    let height = self.height as usize - 1;
+    let height = (self.height as usize).saturating_sub(1);
     let index = index.min(self.library.file_list().len());
 
     self.selected = Some(index);

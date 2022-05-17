@@ -31,16 +31,9 @@ impl super::Backend for GStreamer {
     self.last_played.as_ref()
   }
 
-  fn duration(path: &Path) -> u64 {
-    let timeout = ClockTime::from_seconds(1);
-    if let Ok(discoverer) = gst_pbutils::Discoverer::new(timeout) {
-      if let Ok(info) = discoverer.discover_uri(&format!("file:///{}", path.display())) {
-        if let Some(d) = info.duration() {
-          return d.seconds();
-        }
-      }
-    }
-    0
+  fn track_finished(&self) -> bool {
+    let progress = self.progress();
+    !self.paused && progress.2 == 0 || progress.1 >= progress.2
   }
 
   fn play(&mut self, path: Option<&Path>) -> Result<()> {

@@ -21,7 +21,7 @@ parking_lot = "0.12"
 toml = "0.5"
 serde = "1"
 serde_derive = "1"
-rb = "0.4"
+
 
 # rodio
 rodio = { version = "0.15", optional = true }
@@ -31,6 +31,7 @@ ogg_metadata = { version = "0.4.1", optional = true }
 # symphonia
 symphonia = { version = "0.5", optional = true, features = ["mp3"] }
 cpal = { version = "0.13", optional = true }
+rb = { version = "0.4", optional = true }
 
 # mpris
 dbus = { version = "0.9", optional = true }
@@ -49,7 +50,7 @@ gstreamer-pbutils = { version = "0.18", optional = true }
 default = ["symphonia_backend", "mpris"]
 gstreamer_backend = ["gstreamer", "gstreamer-player", "gstreamer-pbutils"]
 rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
-symphonia_backend = ["symphonia", "cpal"]
+symphonia_backend = ["symphonia", "cpal", "rb"]
 mpris = ["dbus", "dbus-tree"]
 # need to optimize this feature before enabling it by default
 metadata = ["audiotags", "opus_headers", "lewton"]

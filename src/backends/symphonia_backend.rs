@@ -188,6 +188,9 @@ impl super::Backend for Symphonia {
           }
         }
 
+        // wait for the buffer to flush
+        thread::sleep(time::Duration::from_millis(200));
+
         controls.track_finished.store(true, Ordering::SeqCst);
       });
     }
