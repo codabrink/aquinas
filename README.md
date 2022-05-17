@@ -28,15 +28,14 @@ State of the interface.
 - [x] File tree rendering
 - [x] Change directories
 - [x] Seek forward / backward
+- [x] [Symphonia](https://github.com/pdeljanov/Symphonia) backend integration
 - [x] Gstreamer backend integration
 - [x] Rodio backend integration
-- [ ] [Symphonia](https://github.com/pdeljanov/Symphonia) backend integration
 - [x] Automatically play next song
 - [x] Search
 - [x] Sorting / ordering (Basic)
   - [ ] Advanced sorting / ordering
 - [x] Global media keys (mpris)
-- [ ] Now playing info
 - [ ] Help info
 - [ ] Song metadata (disabled temporarily)
 
