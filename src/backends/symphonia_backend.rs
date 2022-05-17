@@ -1,16 +1,17 @@
 use anyhow::{bail, Result};
 use cpal::traits::StreamTrait;
 use cpal::traits::{DeviceTrait, HostTrait};
-use cpal::{BufferSize, Device, Host, SampleRate, StreamConfig, SupportedStreamConfig};
+use cpal::{BufferSize, SampleRate, StreamConfig};
 use rb::*;
+use symphonia::core::formats::{FormatReader, Track};
 
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{self, Instant};
 use std::{
   fs::File,
   path::{Path, PathBuf},
-  thread::Thread,
+  thread,
 };
 use symphonia::core::audio::{RawSample, SignalSpec};
 use symphonia::core::conv::ConvertibleSample;
@@ -35,16 +36,47 @@ impl AudioOutputSample for u16 {}
 
 pub struct Symphonia {
   duration: u64,
-  position: Arc<AtomicU64>,
   kill_handle: Option<Arc<AtomicBool>>,
   last_played: Option<PathBuf>,
+  controls: Arc<Controls>,
+}
+
+#[derive(Default)]
+struct Controls {
+  position: AtomicU64,
+  is_paused: AtomicBool,
+}
+
+trait SymphoniaReader {
+  fn default_track(&self) -> &Track;
+}
+impl SymphoniaReader for Box<dyn FormatReader> {
+  fn default_track(&self) -> &Track {
+    self
+      .tracks()
+      .iter()
+      .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+      .expect("No supported audio tracks")
+  }
+}
+
+impl Symphonia {
+  fn get_reader(path: &Path) -> Result<Box<dyn FormatReader>> {
+    let src = File::open(path)?;
+    let mss = MediaSourceStream::new(Box::new(src), Default::default());
+    let hint = Hint::new();
+    let meta_opts: MetadataOptions = Default::default();
+    let fmt_opts: FormatOptions = Default::default();
+    let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
+    Ok(probed.format)
+  }
 }
 
 impl super::Backend for Symphonia {
   fn new() -> Self {
     Self {
       duration: 0,
-      position: Arc::new(AtomicU64::new(0)),
+      controls: Arc::new(Controls::default()),
       kill_handle: None,
       last_played: None,
     }
@@ -61,45 +93,32 @@ impl super::Backend for Symphonia {
       self.kill_handle = None;
     }
 
+    self.controls = Arc::new(Controls::default());
+
     if let Some(path) = path {
       self.last_played = Some(path.to_owned());
 
-      let src = File::open(path)?;
+      let mut reader = Self::get_reader(path)?;
+      let track = reader.default_track();
 
-      let mss = MediaSourceStream::new(Box::new(src), Default::default());
-
-      let hint = Hint::new();
-
-      let meta_opts: MetadataOptions = Default::default();
-      let fmt_opts: FormatOptions = Default::default();
-
-      let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
-      let mut reader = probed.format;
-
-      let track = reader
-        .tracks()
-        .iter()
-        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-        .expect("No supported audio tracks");
-
-      let tb = track.codec_params.time_base;
-      let dur = track
+      let tb = track.codec_params.time_base.unwrap();
+      let duration = track
         .codec_params
         .n_frames
-        .map(|f| track.codec_params.start_ts + f);
+        .map(|f| tb.calc_time(track.codec_params.start_ts + f).seconds);
 
       let track_id = track.id;
       let kill_handle = Arc::new(AtomicBool::new(false));
-      let position = self.position.clone();
+      let controls = self.controls.clone();
 
-      self.duration = dur.unwrap_or(0);
+      self.duration = duration.unwrap_or(0);
       self.kill_handle = Some(kill_handle.clone());
 
       let decoder_options = DecoderOptions::default();
       let mut decoder =
         symphonia::default::get_codecs().make(&track.codec_params, &decoder_options)?;
 
-      std::thread::spawn(move || {
+      thread::spawn(move || {
         let mut audio_output = None;
         let mut last_pos_update = Instant::now();
 
@@ -107,6 +126,10 @@ impl super::Backend for Symphonia {
           if kill_handle.load(Ordering::SeqCst) {
             // A new track has been started
             break;
+          }
+
+          while controls.is_paused.load(Ordering::Acquire) {
+            thread::sleep(time::Duration::from_millis(200));
           }
 
           let packet = match reader.next_packet() {
@@ -120,7 +143,8 @@ impl super::Backend for Symphonia {
 
           // Update position
           if last_pos_update.elapsed() >= time::Duration::from_secs(1) {
-            position.store(packet.ts(), Ordering::SeqCst);
+            let secs = tb.calc_time(packet.ts()).seconds;
+            controls.position.store(secs, Ordering::SeqCst);
             last_pos_update = Instant::now();
           }
 
@@ -164,16 +188,23 @@ impl super::Backend for Symphonia {
   }
 
   fn is_paused(&self) -> bool {
-    false
+    self.controls.is_paused.load(Ordering::Relaxed)
   }
 
-  fn pause(&mut self) {}
-  fn play_pause(&mut self) {}
+  fn pause(&mut self) {
+    self.controls.is_paused.store(true, Ordering::Release);
+  }
+  fn play_pause(&mut self) {
+    self
+      .controls
+      .is_paused
+      .store(!self.is_paused(), Ordering::Release);
+  }
 
   // (pct, pos, dur)
   fn progress(&self) -> (f64, u64, u64) {
     let duration = self.duration;
-    let position = self.position.load(Ordering::SeqCst);
+    let position = self.controls.position.load(Ordering::SeqCst);
     ((position as f64 / duration as f64), position, duration)
   }
 
@@ -279,16 +310,5 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
   fn flush(&mut self) {
     // Flush is best-effort, ignore the returned result.
     let _ = self.stream.pause();
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::super::Backend;
-  use super::Symphonia;
-
-  #[test]
-  fn symphonia() {
-    let symphonia = Symphonia::new();
   }
 }
