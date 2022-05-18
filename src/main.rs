@@ -1,8 +1,6 @@
 mod app;
 mod backends;
 mod config;
-#[cfg(feature = "rodio_backend")]
-mod duration;
 mod library;
 mod meta;
 #[cfg(feature = "metadata")]

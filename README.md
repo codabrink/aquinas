@@ -30,7 +30,6 @@ State of the interface.
 - [x] Seek forward / backward
 - [x] [Symphonia](https://github.com/pdeljanov/Symphonia) backend integration
 - [x] Gstreamer backend integration
-- [x] Rodio backend integration
 - [x] Automatically play next song
 - [x] Search
 - [x] Sorting / ordering (Basic)
@@ -48,27 +47,6 @@ Install RustUp:
 
     $ curl https://sh.rustup.rs -sSf | sh
 
-Install GStreamer (On Linux, Mac users continue to next section)
+Install Aquinas:
 
-  - **Arch**:
-
-        $ sudo pacman -S gstreamer
-
-  - **Debian/Ubuntu**:
-
-        $ sudo apt install gstreamer1.0-plugins-{base,good,bad} libgstreamer-plugins-{bad,base}1.0-dev
-        $ sudo apt install libgtk-3-dev gstreamer1.0-{gl,gtk3}
-
-  - **Fedora**:
-
-        $ dnf install gstreamer1-devel gstreamer1-plugins-base-tools gstreamer1-doc gstreamer1-plugins-base-devel gstreamer1-plugins-good gstreamer1-plugins-good-extras gstreamer1-plugins-ugly gstreamer1-plugins-bad-free gstreamer1-plugins-bad-free-devel gstreamer1-plugins-bad-free-extras
-
-Install Aquinas
-
-  - **Linux**:
-
-        $ cargo install aquinas
-
-  - **Mac**: GStreamer doesn't work well on Mac, we'll use an alternate backend.
-
-        $ cargo install --no-default-features --features rodio_backend aquinas
+    $ cargo install aquinas

@@ -3,6 +3,7 @@ use cpal::{
   traits::{DeviceTrait, HostTrait, StreamTrait},
   BufferSize, SampleRate, StreamConfig,
 };
+use parking_lot::{Condvar, Mutex};
 use rb::*;
 use std::{
   fs::File,
@@ -34,7 +35,6 @@ impl AudioOutputSample for u16 {}
 
 pub struct Symphonia {
   duration: u64,
-  kill_handle: Option<Arc<AtomicBool>>,
   last_played: Option<PathBuf>,
   controls: Arc<Controls>,
 }
@@ -42,7 +42,7 @@ pub struct Symphonia {
 #[derive(Default)]
 struct Controls {
   position: AtomicU64,
-  is_paused: AtomicBool,
+  is_paused: (Mutex<bool>, Condvar),
   track_finished: AtomicBool,
   seek_to: AtomicU32,
 }
@@ -79,7 +79,6 @@ impl super::Backend for Symphonia {
     Self {
       duration: 0,
       controls: Arc::new(Controls::default()),
-      kill_handle: None,
       last_played: None,
     }
   }
@@ -89,12 +88,6 @@ impl super::Backend for Symphonia {
   }
 
   fn play(&mut self, path: Option<&Path>) -> Result<()> {
-    // close previous player thread
-    if let Some(kill_handle) = &self.kill_handle {
-      kill_handle.store(true, Ordering::SeqCst);
-      self.kill_handle = None;
-    }
-
     self.controls = Arc::new(Controls::default());
 
     if let Some(path) = path {
@@ -109,88 +102,89 @@ impl super::Backend for Symphonia {
         .n_frames
         .map(|f| tb.calc_time(track.codec_params.start_ts + f).seconds);
 
-      let track_id = track.id;
-      let kill_handle = Arc::new(AtomicBool::new(false));
-      let controls = self.controls.clone();
-
       self.duration = duration.unwrap_or(0);
-      self.kill_handle = Some(kill_handle.clone());
 
       let decoder_options = DecoderOptions::default();
-      let mut decoder =
-        symphonia::default::get_codecs().make(&track.codec_params, &decoder_options)?;
 
-      thread::spawn(move || {
-        let mut audio_output = None;
-        let mut last_pos_update = Instant::now();
+      thread::spawn({
+        let controls = self.controls.clone();
+        let track_id = track.id;
+        let mut decoder =
+          symphonia::default::get_codecs().make(&track.codec_params, &decoder_options)?;
 
-        loop {
-          if kill_handle.load(Ordering::SeqCst) {
-            // A new track has been started
-            break;
-          }
+        move || {
+          let mut audio_output: Option<Box<dyn AudioOutput>> = None;
+          let mut last_pos_update = Instant::now();
 
-          while controls.is_paused.load(Ordering::Acquire) {
-            thread::sleep(time::Duration::from_millis(200));
-          }
-
-          let seek_to = controls.seek_to.swap(0, Ordering::SeqCst);
-          if seek_to != 0 {
-            let _ = reader.seek(
-              symphonia::core::formats::SeekMode::Accurate,
-              symphonia::core::formats::SeekTo::Time {
-                time: Time::from(seek_to),
-                track_id: None,
-              },
-            );
-          }
-
-          let packet = match reader.next_packet() {
-            Ok(packet) => packet,
-            Err(_) => break,
-          };
-
-          if packet.track_id() != track_id {
-            continue;
-          }
-
-          // Update position
-          if last_pos_update.elapsed() >= time::Duration::from_secs(1) {
-            let secs = tb.calc_time(packet.ts()).seconds;
-            controls.position.store(secs, Ordering::SeqCst);
-            last_pos_update = Instant::now();
-          }
-
-          match decoder.decode(&packet) {
-            Ok(decoded) => {
-              if audio_output.is_none() {
-                let spec = *decoded.spec();
-                let duration = decoded.capacity() as Duration;
-                audio_output.replace(try_open(spec, duration).unwrap());
-              }
-
-              // TODO: handle seeking
-
-              if let Some(audio_output) = &mut audio_output {
-                audio_output.write(decoded).unwrap();
-              }
-            }
-            Err(Error::DecodeError(err)) => {
-              // Decode errors are not fatal. Print the error message and try to decode the next
-              // packet as usual.
-              println!("decode error: {}", err);
-            }
-            _ => {
-              // TODO: error handling
+          loop {
+            if Arc::strong_count(&controls) == 1 {
+              // A new track has been started
               break;
             }
+
+            // pausing
+            let &(ref lock, ref cvar) = &controls.is_paused;
+            let mut is_paused = lock.lock();
+            if *is_paused {
+              audio_output.as_ref().map(|ao| ao.pause());
+              cvar.wait(&mut is_paused);
+              audio_output.as_ref().map(|ao| ao.play());
+            }
+
+            // seeking
+            let seek_to = controls.seek_to.swap(0, Ordering::SeqCst);
+            if seek_to != 0 {
+              let _ = reader.seek(
+                symphonia::core::formats::SeekMode::Accurate,
+                symphonia::core::formats::SeekTo::Time {
+                  time: Time::from(seek_to),
+                  track_id: None,
+                },
+              );
+            }
+
+            let packet = match reader.next_packet() {
+              Ok(packet) => packet,
+              Err(_) => break,
+            };
+
+            if packet.track_id() != track_id {
+              continue;
+            }
+
+            // Update position
+            if last_pos_update.elapsed() >= time::Duration::from_secs(1) {
+              let secs = tb.calc_time(packet.ts()).seconds;
+              controls.position.store(secs, Ordering::SeqCst);
+              last_pos_update = Instant::now();
+            }
+
+            match decoder.decode(&packet) {
+              Ok(decoded) => {
+                if audio_output.is_none() {
+                  let spec = *decoded.spec();
+                  let duration = decoded.capacity() as Duration;
+                  audio_output.replace(try_open(spec, duration).unwrap());
+                }
+
+                if let Some(audio_output) = &mut audio_output {
+                  audio_output.write(decoded).unwrap();
+                }
+              }
+              Err(Error::DecodeError(err)) => {
+                println!("decode error: {}", err);
+              }
+              _ => {
+                break;
+              }
+            }
           }
+
+          // wait for the buffer to flush
+          thread::sleep(time::Duration::from_millis(200));
+
+          controls.track_finished.store(true, Ordering::SeqCst);
         }
-
-        // wait for the buffer to flush
-        thread::sleep(time::Duration::from_millis(200));
-
-        controls.track_finished.store(true, Ordering::SeqCst);
       });
     }
 
@@ -202,17 +196,20 @@ impl super::Backend for Symphonia {
   }
 
   fn is_paused(&self) -> bool {
-    self.controls.is_paused.load(Ordering::Relaxed)
+    *self.controls.is_paused.0.lock()
   }
 
   fn pause(&mut self) {
-    self.controls.is_paused.store(true, Ordering::Release);
+    let &(ref lock, ref cvar) = &self.controls.is_paused;
+    *lock.lock() = true;
+    cvar.notify_one();
   }
+
   fn play_pause(&mut self) {
-    self
-      .controls
-      .is_paused
-      .store(!self.is_paused(), Ordering::Release);
+    let &(ref lock, ref cvar) = &self.controls.is_paused;
+    let mut is_paused = lock.lock();
+    *is_paused = !*is_paused;
+    cvar.notify_one();
   }
 
   // (pct, pos, dur)
@@ -244,6 +241,8 @@ where
 pub trait AudioOutput {
   fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
   fn flush(&mut self);
+  fn pause(&self);
+  fn play(&self);
 }
 
 fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
@@ -330,5 +329,12 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
   fn flush(&mut self) {
     // Flush is best-effort, ignore the returned result.
     let _ = self.stream.pause();
+  }
+
+  fn pause(&self) {
+    let _ = self.stream.pause();
+  }
+  fn play(&self) {
+    let _ = self.stream.play();
   }
 }

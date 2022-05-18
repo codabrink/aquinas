@@ -1,6 +1,6 @@
 [package]
 name = "aquinas"
-version = "0.0.16"
+version = "0.1.0"
 license = "MPL-2.0"
 readme = "README.md"
 description = "A simple command line media player. (Like cmus, but simpler.)"
@@ -9,6 +9,10 @@ keywords = ["audio", "multimedia", "media", "mediaplayer", "music"]
 authors = ["Dakota Brink <git@kota.is>"]
 repository = "https://github.com/codabrink/aquinas"
 edition = "2021"
+
+[profile.release]
+strip = true
+lto = true
 
 [dependencies]
 anyhow = "1"
@@ -21,11 +25,6 @@ parking_lot = "0.12"
 toml = "0.5"
 serde = "1"
 serde_derive = "1"
-
-# rodio
-rodio = { version = "0.15", optional = true }
-mp3-duration = { version = "0.1", optional = true }
-ogg_metadata = { version = "0.4.1", optional = true }
 
 # symphonia
 symphonia = { version = "0.5", optional = true, features = ["mp3"] }
@@ -48,13 +47,7 @@ gstreamer-pbutils = { version = "0.18", optional = true }
 [features]
 default = ["symphonia_backend", "mpris"]
 gstreamer_backend = ["gstreamer", "gstreamer-player", "gstreamer-pbutils"]
-rodio_backend = ["rodio", "mp3-duration", "ogg_metadata"]
 symphonia_backend = ["symphonia", "cpal", "rb"]
 mpris = ["dbus", "dbus-tree"]
 # need to optimize this feature before enabling it by default
 metadata = ["audiotags", "opus_headers", "lewton"]
-
-
-[profile.release]
-strip = true
-lto = true

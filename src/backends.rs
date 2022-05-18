@@ -1,7 +1,5 @@
 #[cfg(feature = "gstreamer_backend")]
 mod gstreamer_backend;
-#[cfg(feature = "rodio_backend")]
-mod rodio_backend;
 #[cfg(feature = "symphonia_backend")]
 mod symphonia_backend;
 
@@ -15,8 +13,6 @@ pub fn load() -> Box<dyn Backend> {
   return Box::new(gstreamer_backend::GStreamer::new());
   #[cfg(feature = "symphonia_backend")]
   return Box::new(symphonia_backend::Symphonia::new());
-  #[cfg(feature = "rodio_backend")]
-  return Box::new(rodio::Rodio::new());
 }
 
 pub trait Backend {

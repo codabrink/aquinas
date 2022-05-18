@@ -1,8 +1,6 @@
 use crate::prelude::*;
 use audiotags::Tag;
 use lewton::inside_ogg::OggStreamReader;
-#[cfg(feature = "rodio_backend")]
-use ogg_metadata::{read_format, AudioMetadata, OggFormat::Vorbis};
 use std::fs;
 
 #[derive(PartialEq, Default, Clone, Debug, PartialOrd, Eq, Ord)]
