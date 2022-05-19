@@ -34,7 +34,7 @@ State of the interface.
 - [x] Search
 - [x] Sorting / ordering (Basic)
   - [ ] Advanced sorting / ordering
-- [x] Global media keys (mpris)
+- [x] Global media keys (Linux, Windows, (still working on MacOS...))
 - [ ] Help info
 - [ ] Song metadata (disabled temporarily)
 
