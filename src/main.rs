@@ -1,12 +1,11 @@
 mod app;
 mod backends;
 mod config;
+mod controls;
 mod library;
 mod meta;
 #[cfg(feature = "metadata")]
 mod metadata;
-#[cfg(feature = "mpris")]
-mod mpris;
 mod prelude;
 
 pub use backends::Backend as AudioBackend;

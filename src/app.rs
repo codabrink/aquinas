@@ -1,8 +1,7 @@
 mod file_list;
 mod player_state;
 mod user_input;
-#[cfg(feature = "mpris")]
-use crate::mpris::{build_metadata, PlaybackStatus};
+use crate::controls::{Metadata, PlaybackStatus};
 use crate::*;
 use anyhow::Result;
 use crossbeam_channel::{Receiver, Sender};
@@ -31,7 +30,7 @@ pub enum Focusable {
   Search,
 }
 
-pub enum AppMessage {
+pub enum AppCommand {
   Select(usize),
   SelectDelta(i64),
   Play(Option<PathBuf>),
@@ -52,11 +51,9 @@ pub struct App {
   pub progress: (f64, u64, u64),
   pub playing: Option<Arc<Node>>,
   pub play_index: usize,
-  mailbox: (Arc<Sender<AppMessage>>, Receiver<AppMessage>),
+  commands: (Arc<Sender<AppCommand>>, Receiver<AppCommand>),
   last_played: Option<Arc<Node>>,
-
-  #[cfg(feature = "mpris")]
-  mpris_tx: Sender<PlaybackStatus>,
+  status_tx: Sender<PlaybackStatus>,
 }
 
 impl App {
@@ -69,17 +66,8 @@ impl App {
     let (sender, receiver) = crossbeam_channel::unbounded();
     let sender = Arc::new(sender);
 
-    #[cfg(feature = "mpris")]
-    let mpris_tx = {
-      let (mpris_tx, mpris_rx) = crossbeam_channel::unbounded();
-      let mailbox = sender.clone();
-
-      std::thread::spawn(move || {
-        let _ = mpris::run_dbus_server(mailbox, mpris_rx);
-      });
-
-      mpris_tx
-    };
+    let (status_tx, status_rx) = crossbeam_channel::unbounded();
+    controls::event_listener(sender.clone(), status_rx);
 
     let mut app = Self {
       backend,
@@ -92,11 +80,9 @@ impl App {
       window_offset: 0,
       progress,
       play_index: 0,
-      mailbox: (sender, receiver),
+      commands: (sender, receiver),
       last_played: None,
-
-      #[cfg(feature = "mpris")]
-      mpris_tx,
+      status_tx,
     };
     // app.set_root(&path);
 
@@ -113,8 +99,8 @@ impl App {
     app
   }
 
-  pub fn message(&self, msg: AppMessage) {
-    let _ = self.mailbox.0.send(msg);
+  pub fn message(&self, msg: AppCommand) {
+    let _ = self.commands.0.send(msg);
   }
 
   pub fn set_root(&mut self, path: &Path) {
@@ -164,7 +150,7 @@ impl App {
     key: &KeyEvent,
     terminal: &mut Terminal<B>,
   ) -> Result<()> {
-    use AppMessage::*;
+    use AppCommand::*;
 
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let alt = key.modifiers.contains(KeyModifiers::ALT);
@@ -239,13 +225,13 @@ impl App {
   }
 
   fn update(&mut self, list_state: &mut ListState) -> Result<()> {
-    use AppMessage::*;
+    use AppCommand::*;
 
     self.progress = self.backend.progress();
 
     self.ensure_continue();
 
-    let messages: Vec<AppMessage> = self.mailbox.1.try_iter().collect();
+    let messages: Vec<AppCommand> = self.commands.1.try_iter().collect();
     for msg in messages {
       match msg {
         Select(index) => {
@@ -280,13 +266,10 @@ impl App {
     match self.library.file_list().get(index) {
       Some((node, _)) => {
         if node.is_file() {
-          #[cfg(feature = "mpris")]
-          {
-            let _ = self
-              .mpris_tx
-              .send(PlaybackStatus::Playing(Some(build_metadata(node))));
-          }
-
+          let _ = self.status_tx.send(PlaybackStatus::Playing(Some(Metadata {
+            title: Some(node.title().to_owned()),
+            ..Default::default()
+          })));
           self.last_played = Some(node.clone());
           let _ = self.backend.play(Some(&node.path));
           return;
@@ -299,7 +282,7 @@ impl App {
         self.pause();
       }
     }
-    self.message(AppMessage::Select(index));
+    self.message(AppCommand::Select(index));
   }
 
   pub fn play_path(&mut self, path: impl AsRef<Path>) {
@@ -335,19 +318,15 @@ impl App {
   pub fn pause(&mut self) {
     self.backend.pause();
 
-    #[cfg(feature = "mpris")]
-    let _ = self.mpris_tx.send(PlaybackStatus::Paused);
+    let _ = self.status_tx.send(PlaybackStatus::Paused);
   }
 
   pub fn play_pause(&mut self) {
     self.backend.play_pause();
 
-    #[cfg(feature = "mpris")]
     let _ = match self.backend.is_paused() {
-      true => self.mpris_tx.send(PlaybackStatus::Paused),
-      false => self.mpris_tx.send(PlaybackStatus::Playing(
-        self.last_played.as_ref().map(|lp| build_metadata(&lp)),
-      )),
+      true => self.status_tx.send(PlaybackStatus::Paused),
+      false => self.status_tx.send(PlaybackStatus::Playing(None)),
     };
   }
 
