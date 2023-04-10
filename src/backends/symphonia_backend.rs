@@ -264,10 +264,11 @@ fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>
     cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device),
     cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device),
     cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device),
+    _ => unreachable!(), // We shouldn't reach here... right?
   }
 }
 
-impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
+impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
   pub fn try_open(
     spec: SignalSpec,
     duration: Duration,
@@ -293,6 +294,7 @@ impl<T: AudioOutputSample> CpalAudioOutputImpl<T> {
         data[written..].iter_mut().for_each(|s| *s = T::MID);
       },
       move |_| {},
+      None,
     )?;
 
     stream.play()?;
