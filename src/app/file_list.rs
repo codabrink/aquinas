@@ -44,6 +44,7 @@ pub fn render_file_list<'a, B: Backend>(
     .highlight_style(
       Style::default()
         .bg(Color::LightGreen)
+        .fg(Color::Black)
         .add_modifier(Modifier::BOLD),
     );
   frame.render_stateful_widget(list, area, list_state);
