@@ -60,6 +60,16 @@ impl SymphoniaReader for Box<dyn FormatReader> {
   }
 }
 
+fn reset_audio_output(
+  output: &mut Option<Box<dyn AudioOutput>>,
+  spec: &Option<SignalSpec>,
+  duration: u64,
+) {
+  if let Some(spec) = spec {
+    output.replace(try_open(*spec, duration).unwrap());
+  }
+}
+
 impl Symphonia {
   fn get_reader(path: &Path) -> Result<Box<dyn FormatReader>> {
     let src = File::open(path)?;
@@ -115,19 +125,18 @@ impl super::Backend for Symphonia {
         move || {
           let mut audio_output: Option<Box<dyn AudioOutput>> = None;
           let mut last_pos_update = Instant::now();
+          let mut spec: Option<SignalSpec> = None;
+          let mut duration = 0;
 
-          loop {
-            if Arc::strong_count(&controls) == 1 {
-              // A new track has been started
-              break;
-            }
-
+          // If controls is not referenced elsewhere, it means the main app has moved to a different track.
+          while Arc::strong_count(&controls) != 1 {
             // pausing
             let &(ref lock, ref cvar) = &controls.is_paused;
             let mut is_paused = lock.lock();
             if *is_paused {
               audio_output.as_ref().map(|ao| ao.pause());
               cvar.wait(&mut is_paused);
+              reset_audio_output(&mut audio_output, &spec, duration);
               audio_output.as_ref().map(|ao| ao.play());
             }
 
@@ -162,9 +171,10 @@ impl super::Backend for Symphonia {
             match decoder.decode(&packet) {
               Ok(decoded) => {
                 if audio_output.is_none() {
-                  let spec = *decoded.spec();
-                  let duration = decoded.capacity() as Duration;
-                  audio_output.replace(try_open(spec, duration).unwrap());
+                  spec = Some(*decoded.spec());
+                  duration = decoded.capacity() as Duration;
+                  reset_audio_output(&mut audio_output, &spec, duration);
+                  // audio_output.replace(try_open(spec.unwrap(), duration).unwrap());
                 }
 
                 if let Some(audio_output) = &mut audio_output {
