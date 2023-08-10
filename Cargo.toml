@@ -1,6 +1,6 @@
 [package]
 name = "aquinas"
-version = "0.1.1"
+version = "0.1.2"
 license = "MPL-2.0"
 readme = "README.md"
 description = "A simple command line media player. (Like cmus, but simpler.)"
@@ -18,9 +18,9 @@ lto = true
 anyhow = "1"
 dirs = "5"
 tui = "0.19"
-crossterm = "0.26"
+crossterm = "0.27"
 crossbeam-channel = "0.5"
-hashbrown = "0.13"
+hashbrown = "0.14"
 parking_lot = "0.12"
 toml = "0.7"
 serde = "1"
@@ -28,9 +28,8 @@ serde_derive = "1"
 souvlaki = "0.6"
 winit = "0.28"
 
-
 # symphonia
-symphonia = { version = "0.5", optional = true, features = ["mp3"] }
+symphonia = { version = "0.5", optional = true, features = ["all"] }
 cpal = { version = "0.15", optional = true }
 rb = { version = "0.4", optional = true }
 

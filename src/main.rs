@@ -15,25 +15,36 @@ pub use meta::Meta;
 #[cfg(feature = "metadata")]
 pub use metadata::{get_metadata, Metadata};
 pub use prelude::*;
+#[cfg(target_os = "macos")]
 use winit::{event_loop::EventLoop, window::WindowBuilder};
 
 fn main() {
-  std::thread::spawn(|| {
-    let mut app = app::App::new();
-    app.run_app();
-  });
+  let create_instance = || {
+    let _ = app::App::new().run_app();
+  };
 
+  #[cfg(target_os = "macos")]
+  {
+    std::thread::spawn(create_instance);
+    create_window();
+  }
+  #[cfg(not(target_os = "macos"))]
+  create_instance();
+}
+
+// OSX is weird and requires a window to take media key events
+// so let's make an invisible one
+#[cfg(target_os = "macos")]
+fn create_window() {
   let event_loop = EventLoop::new();
 
-  // OSX is weird and requires a window to take media key events
-  // so let's make an invisible one
   let _window = WindowBuilder::new()
     .with_title("Aquinas Media Player")
     .with_visible(false)
     .build(&event_loop)
     .unwrap();
 
-  event_loop.run(move |event, _, control_flow| {
+  event_loop.run(move |_event, _, control_flow| {
     control_flow.set_wait();
   });
 }
