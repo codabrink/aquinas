@@ -70,7 +70,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-apple-darwin
+          targets: aarch64-apple-darwin
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -91,19 +91,19 @@ jobs:
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release binary
-        run: cargo build --release --target x86_64-apple-darwin
+        run: cargo build --release --target aarch64-apple-darwin
 
       - name: Create release archive
         run: |
-          cd target/x86_64-apple-darwin/release
-          tar -czf ../../../aquinas-${{ github.ref_name }}-x86_64-macos.tar.gz aquinas
+          cd target/aarch64-apple-darwin/release
+          tar -czf ../../../aquinas-${{ github.ref_name }}-aarch64-macos.tar.gz aquinas
           cd ../../..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-binary
-          path: aquinas-${{ github.ref_name }}-x86_64-macos.tar.gz
+          path: aquinas-${{ github.ref_name }}-aarch64-macos.tar.gz
 
   create-release:
     needs: [build-linux, build-macos]
@@ -127,7 +127,7 @@ jobs:
         with:
           files: |
             aquinas-${{ github.ref_name }}-x86_64-linux.tar.gz
-            aquinas-${{ github.ref_name }}-x86_64-macos.tar.gz
+            aquinas-${{ github.ref_name }}-aarch64-macos.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
