@@ -1,9 +1,9 @@
 pub use anyhow::{bail, Result};
 pub use crossbeam_channel::{Receiver, Sender};
-pub use hashbrown::{HashMap, HashSet};
 pub use parking_lot::Mutex;
 pub use std::{
   boxed::Box,
+  collections::{HashMap, HashSet},
   ffi::OsStr,
   fs::{self, File},
   io::BufReader,

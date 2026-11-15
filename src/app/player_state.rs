@@ -1,12 +1,12 @@
 use super::*;
-use tui::{
+use ratatui::{
   layout::{Constraint, Direction, Layout, Rect},
   style::{Color, Style},
-  terminal::Frame,
+  Frame,
   widgets::{Block, Borders, Gauge},
 };
 
-pub fn render<'a, B: Backend>(state: &'a mut App, area: &Rect, frame: &mut Frame<B>) {
+pub fn render<'a>(state: &'a mut App, area: &Rect, frame: &mut Frame) {
   let chunks = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![Constraint::Length(2)])

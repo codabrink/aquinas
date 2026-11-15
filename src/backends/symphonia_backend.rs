@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use cpal::{
   traits::{DeviceTrait, HostTrait, StreamTrait},
-  BufferSize, SampleRate, StreamConfig,
+  BufferSize, StreamConfig,
 };
 use parking_lot::{Condvar, Mutex};
 use rb::*;
@@ -14,19 +14,17 @@ use std::{
   time::{self, Instant},
 };
 use symphonia::core::{
-  audio::{AudioBufferRef, RawSample, SampleBuffer, SignalSpec},
-  codecs::{DecoderOptions, CODEC_TYPE_NULL},
-  conv::ConvertibleSample,
+  audio::{conv::ConvertibleSample, AudioSpec, GenericAudioBufferRef},
+  codecs::audio::AudioDecoderOptions,
   errors::Error,
-  formats::{FormatOptions, FormatReader, Track},
+  formats::{probe::Hint, FormatOptions, FormatReader, TrackType},
   io::MediaSourceStream,
   meta::MetadataOptions,
-  probe::Hint,
-  units::{Duration, Time},
+  units::{Time, Timestamp},
 };
 
 trait AudioOutputSample:
-  cpal::Sample + ConvertibleSample + RawSample + std::marker::Send + 'static
+  cpal::Sample + ConvertibleSample + std::marker::Send + 'static
 {
 }
 impl AudioOutputSample for f32 {}
@@ -47,26 +45,12 @@ struct Controls {
   seek_to: AtomicU32,
 }
 
-trait SymphoniaReader {
-  fn default_track(&self) -> &Track;
-}
-impl SymphoniaReader for Box<dyn FormatReader> {
-  fn default_track(&self) -> &Track {
-    self
-      .tracks()
-      .iter()
-      .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-      .expect("No supported audio tracks")
-  }
-}
-
 fn reset_audio_output(
   output: &mut Option<Box<dyn AudioOutput>>,
-  spec: &Option<SignalSpec>,
-  duration: u64,
+  spec: &Option<AudioSpec>,
 ) {
   if let Some(spec) = spec {
-    output.replace(try_open(*spec, duration).unwrap());
+    output.replace(try_open(spec).unwrap());
   }
 }
 
@@ -78,9 +62,9 @@ impl Symphonia {
     let hint = Hint::new();
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
-    let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
+    let format = symphonia::default::get_probe().probe(&hint, mss, fmt_opts, meta_opts)?;
 
-    Ok(probed.format)
+    Ok(format)
   }
 }
 
@@ -104,29 +88,35 @@ impl super::Backend for Symphonia {
       self.last_played = Some(path.to_owned());
 
       let mut reader = Self::get_reader(path)?;
-      let track = reader.default_track();
+      let track = match reader.default_track(TrackType::Audio) {
+        Some(track) => track,
+        None => bail!("No supported audio tracks"),
+      };
 
-      let tb = track.codec_params.time_base.unwrap();
+      let tb = track.time_base.unwrap();
       let duration = track
-        .codec_params
-        .n_frames
-        .map(|f| tb.calc_time(track.codec_params.start_ts + f).seconds);
+        .num_frames
+        .and_then(|f| tb.calc_time(Timestamp::new(track.start_ts.get() + f as i64)))
+        .map(|t| t.as_secs() as u64);
 
       self.duration = duration.unwrap_or(0);
 
-      let decoder_options = DecoderOptions::default();
+      let decoder_options = AudioDecoderOptions::default();
 
       thread::spawn({
         let controls = self.controls.clone();
         let track_id = track.id;
+        let codec_params = match track.codec_params.as_ref().and_then(|p| p.audio()) {
+          Some(params) => params,
+          None => bail!("track has no audio codec parameters"),
+        };
         let mut decoder =
-          symphonia::default::get_codecs().make(&track.codec_params, &decoder_options)?;
+          symphonia::default::get_codecs().make_audio_decoder(codec_params, &decoder_options)?;
 
         move || {
           let mut audio_output: Option<Box<dyn AudioOutput>> = None;
           let mut last_pos_update = Instant::now();
-          let mut spec: Option<SignalSpec> = None;
-          let mut duration = 0;
+          let mut spec: Option<AudioSpec> = None;
 
           // If controls is not referenced elsewhere, it means the main app has moved to a different track.
           while Arc::strong_count(&controls) != 1 {
@@ -136,7 +126,7 @@ impl super::Backend for Symphonia {
             if *is_paused {
               audio_output.as_ref().map(|ao| ao.pause());
               cvar.wait(&mut is_paused);
-              reset_audio_output(&mut audio_output, &spec, duration);
+              reset_audio_output(&mut audio_output, &spec);
               audio_output.as_ref().map(|ao| ao.play());
             }
 
@@ -153,28 +143,27 @@ impl super::Backend for Symphonia {
             }
 
             let packet = match reader.next_packet() {
-              Ok(packet) => packet,
-              Err(_) => break,
+              Ok(Some(packet)) => packet,
+              _ => break,
             };
 
-            if packet.track_id() != track_id {
+            if packet.track_id != track_id {
               continue;
             }
 
             // Update position
             if last_pos_update.elapsed() >= time::Duration::from_secs(1) {
-              let secs = tb.calc_time(packet.ts()).seconds;
-              controls.position.store(secs, Ordering::SeqCst);
+              if let Some(time) = tb.calc_time(packet.pts) {
+                controls.position.store(time.as_secs() as u64, Ordering::SeqCst);
+              }
               last_pos_update = Instant::now();
             }
 
             match decoder.decode(&packet) {
               Ok(decoded) => {
                 if audio_output.is_none() {
-                  spec = Some(*decoded.spec());
-                  duration = decoded.capacity() as Duration;
-                  reset_audio_output(&mut audio_output, &spec, duration);
-                  // audio_output.replace(try_open(spec.unwrap(), duration).unwrap());
+                  spec = Some(decoded.spec().clone());
+                  reset_audio_output(&mut audio_output, &spec);
                 }
 
                 if let Some(audio_output) = &mut audio_output {
@@ -244,18 +233,18 @@ where
   T: AudioOutputSample,
 {
   ring_buf_tx: rb::Producer<T>,
-  sample_buf: SampleBuffer<T>,
+  sample_buf: Vec<T>,
   stream: cpal::Stream,
 }
 
 pub trait AudioOutput {
-  fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()>;
+  fn write(&mut self, decoded: GenericAudioBufferRef<'_>) -> Result<()>;
   fn flush(&mut self);
   fn pause(&self);
   fn play(&self);
 }
 
-fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>> {
+fn try_open(spec: &AudioSpec) -> Result<Box<dyn AudioOutput>> {
   let host = cpal::default_host();
   let device = match host.default_output_device() {
     Some(device) => device,
@@ -271,34 +260,33 @@ fn try_open(spec: SignalSpec, duration: Duration) -> Result<Box<dyn AudioOutput>
   };
 
   match config.sample_format() {
-    cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, duration, &device),
-    cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, duration, &device),
-    cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, duration, &device),
+    cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, &device),
+    cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, &device),
+    cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, &device),
     _ => unreachable!(), // We shouldn't reach here... right?
   }
 }
 
 impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
   pub fn try_open(
-    spec: SignalSpec,
-    duration: Duration,
+    spec: &AudioSpec,
     device: &cpal::Device,
   ) -> Result<Box<dyn AudioOutput>> {
-    let channels = spec.channels.count() as usize;
+    let channels = spec.channels().count();
 
-    let sample_buf = SampleBuffer::<T>::new(duration, spec);
+    let sample_buf = Vec::new();
     let config = StreamConfig {
       channels: channels as cpal::ChannelCount,
-      sample_rate: SampleRate(spec.rate),
+      sample_rate: spec.rate(),
       buffer_size: BufferSize::Default,
     };
 
-    let ring_len = ((200 * spec.rate as usize) / 1000) * channels;
+    let ring_len = ((200 * spec.rate() as usize) / 1000) * channels;
     let ring_buf = SpscRb::new(ring_len);
     let (ring_buf_tx, ring_buf_rx) = (ring_buf.producer(), ring_buf.consumer());
 
     let stream = device.build_output_stream(
-      &config,
+      config,
       move |data: &mut [T], _| {
         let written = ring_buf_rx.read(data).unwrap_or(0);
         data[written..].iter_mut().for_each(|s| *s = T::MID);
@@ -318,7 +306,7 @@ impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
 }
 
 impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
-  fn write(&mut self, decoded: AudioBufferRef<'_>) -> Result<()> {
+  fn write(&mut self, decoded: GenericAudioBufferRef<'_>) -> Result<()> {
     // Do nothing if there are no audio frames.
     if decoded.frames() == 0 {
       return Ok(());
@@ -326,10 +314,10 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
 
     // Audio samples must be interleaved for cpal. Interleave the samples in the audio
     // buffer into the sample buffer.
-    self.sample_buf.copy_interleaved_ref(decoded);
+    decoded.copy_to_vec_interleaved(&mut self.sample_buf);
 
     // Write all the interleaved samples to the ring buffer.
-    let mut samples = self.sample_buf.samples();
+    let mut samples = &self.sample_buf[..];
 
     while let Some(written) = self.ring_buf_tx.write_blocking(samples) {
       samples = &samples[written..];

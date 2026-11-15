@@ -16,7 +16,7 @@ use std::{
   path::Path,
   time::{Duration, Instant},
 };
-use tui::{
+use ratatui::{
   backend::{Backend, CrosstermBackend},
   layout::{Constraint, Direction, Layout},
   widgets::ListState,
@@ -57,8 +57,12 @@ pub struct App {
 }
 
 impl App {
-  pub fn new() -> Self {
-    let path = std::env::current_dir().expect("Could not get current dir.");
+  pub fn new(directory: Option<PathBuf>) -> Self {
+    let explicit_dir = directory.is_some();
+    let path = match directory {
+      Some(dir) => dir,
+      None => std::env::current_dir().expect("Could not get current dir."),
+    };
     let backend = backends::load();
 
     let progress = backend.progress();
@@ -86,7 +90,8 @@ impl App {
     };
     // app.set_root(&path);
 
-    if let Ok(meta) = Meta::load() {
+    // Only restore the last opened dir when no directory was passed in
+    if let (false, Ok(meta)) = (explicit_dir, Meta::load()) {
       if let Some(last_path) = meta.last_path {
         app.focus = Focusable::Dir;
         app.input = last_path.display().to_string();
@@ -190,9 +195,12 @@ impl App {
     &mut self,
     terminal: &mut Terminal<B>,
     list_state: &mut ListState,
-  ) -> Result<()> {
+  ) -> Result<()>
+  where
+    B::Error: Send + Sync + 'static,
+  {
     terminal.draw(|f| {
-      self.height = f.size().height as i32 - 1;
+      self.height = f.area().height as i32 - 1;
 
       let v_constraints = match self.focus {
         Focusable::Dir | Focusable::Search => {
@@ -208,7 +216,7 @@ impl App {
       let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints(v_constraints)
-        .split(f.size());
+        .split(f.area());
 
       match self.focus {
         Focusable::Dir | Focusable::Search => {

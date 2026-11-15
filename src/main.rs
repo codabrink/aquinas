@@ -15,12 +15,26 @@ pub use meta::Meta;
 #[cfg(feature = "metadata")]
 pub use metadata::{get_metadata, Metadata};
 pub use prelude::*;
+use clap::Parser;
 #[cfg(target_os = "macos")]
-use winit::{event_loop::EventLoop, window::WindowBuilder};
+use winit::{
+  application::ApplicationHandler,
+  event::WindowEvent,
+  event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+  window::{Window, WindowId},
+};
+
+#[derive(Parser)]
+#[command(version, about)]
+struct Args {
+  /// Directory to open (defaults to the current directory)
+  directory: Option<PathBuf>,
+}
 
 fn main() {
-  let create_instance = || {
-    let _ = app::App::new().run_app();
+  let args = Args::parse();
+  let create_instance = move || {
+    let _ = app::App::new(args.directory).run_app();
   };
 
   #[cfg(target_os = "macos")]
@@ -36,15 +50,27 @@ fn main() {
 // so let's make an invisible one
 #[cfg(target_os = "macos")]
 fn create_window() {
-  let event_loop = EventLoop::new();
+  let event_loop = EventLoop::new().unwrap();
+  event_loop.set_control_flow(ControlFlow::Wait);
+  event_loop.run_app(&mut HiddenWindow::default()).unwrap();
+}
 
-  let _window = WindowBuilder::new()
-    .with_title("Aquinas Media Player")
-    .with_visible(false)
-    .build(&event_loop)
-    .unwrap();
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct HiddenWindow {
+  window: Option<Window>,
+}
 
-  event_loop.run(move |_event, _, control_flow| {
-    control_flow.set_wait();
-  });
+#[cfg(target_os = "macos")]
+impl ApplicationHandler for HiddenWindow {
+  fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    if self.window.is_none() {
+      let attributes = Window::default_attributes()
+        .with_title("Aquinas Media Player")
+        .with_visible(false);
+      self.window = Some(event_loop.create_window(attributes).unwrap());
+    }
+  }
+
+  fn window_event(&mut self, _: &ActiveEventLoop, _: WindowId, _: WindowEvent) {}
 }
