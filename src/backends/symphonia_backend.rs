@@ -121,13 +121,18 @@ impl super::Backend for Symphonia {
           // If controls is not referenced elsewhere, it means the main app has moved to a different track.
           while Arc::strong_count(&controls) != 1 {
             // pausing
-            let &(ref lock, ref cvar) = &controls.is_paused;
-            let mut is_paused = lock.lock();
-            if *is_paused {
-              audio_output.as_ref().map(|ao| ao.pause());
-              cvar.wait(&mut is_paused);
-              reset_audio_output(&mut audio_output, &spec);
-              audio_output.as_ref().map(|ao| ao.play());
+            // Scope the guard so the lock isn't held while blocking on audio output,
+            // otherwise the UI thread deadlocks on pause()/is_paused().
+            {
+              let &(ref lock, ref cvar) = &controls.is_paused;
+              let mut is_paused = lock.lock();
+              if *is_paused {
+                audio_output.as_ref().map(|ao| ao.pause());
+                cvar.wait(&mut is_paused);
+                drop(is_paused);
+                reset_audio_output(&mut audio_output, &spec);
+                audio_output.as_ref().map(|ao| ao.play());
+              }
             }
 
             // seeking
