@@ -10,17 +10,17 @@ use crossterm::{
   execute,
   terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::{
-  boxed::Box,
-  io,
-  path::Path,
-  time::{Duration, Instant},
-};
 use ratatui::{
   backend::{Backend, CrosstermBackend},
   layout::{Constraint, Direction, Layout},
   widgets::ListState,
   Terminal,
+};
+use std::{
+  boxed::Box,
+  io,
+  path::Path,
+  time::{Duration, Instant},
 };
 
 #[derive(PartialEq)]
@@ -320,6 +320,7 @@ impl App {
       .position(|(n, _)| n.path == path);
     if let Some(index) = index {
       self.play(index);
+      self.message(AppCommand::Select(index));
     }
   }
 

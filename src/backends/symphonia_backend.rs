@@ -5,6 +5,9 @@ use cpal::{
 };
 use parking_lot::{Condvar, Mutex};
 use rb::*;
+use rubato::{
+  audioadapter_buffers::direct::InterleavedSlice, Fft, FixedSync, Resampler as _,
+};
 use std::{
   fs::File,
   path::{Path, PathBuf},
@@ -24,7 +27,7 @@ use symphonia::core::{
 };
 
 trait AudioOutputSample:
-  cpal::Sample + ConvertibleSample + std::marker::Send + 'static
+  cpal::Sample + cpal::FromSample<f32> + ConvertibleSample + std::marker::Send + 'static
 {
 }
 impl AudioOutputSample for f32 {}
@@ -240,6 +243,67 @@ where
   ring_buf_tx: rb::Producer<T>,
   sample_buf: Vec<T>,
   stream: cpal::Stream,
+  rate_converter: Option<RateConverter>,
+}
+
+// Resamples to the device's rate when it can't open a stream at the file's rate
+// (e.g. 48kHz opus on a 44.1kHz-only output).
+struct RateConverter {
+  resampler: Fft<f32>,
+  channels: usize,
+  decoded: Vec<f32>,
+  pending: Vec<f32>,
+  output: Vec<f32>,
+}
+
+impl RateConverter {
+  const CHUNK_FRAMES: usize = 1024;
+
+  fn new(rate_in: u32, rate_out: u32, channels: usize) -> Result<Self> {
+    let resampler = Fft::new(
+      rate_in as usize,
+      rate_out as usize,
+      Self::CHUNK_FRAMES,
+      channels,
+      FixedSync::Input,
+    )?;
+    Ok(Self {
+      resampler,
+      channels,
+      decoded: Vec::new(),
+      pending: Vec::new(),
+      output: Vec::new(),
+    })
+  }
+
+  // Buffers interleaved input and resamples every complete chunk.
+  fn process(&mut self, decoded: &GenericAudioBufferRef<'_>) -> Result<&[f32]> {
+    decoded.copy_to_vec_interleaved(&mut self.decoded);
+    self.pending.extend_from_slice(&self.decoded);
+    self.output.clear();
+
+    let ch = self.channels;
+    let mut consumed = 0;
+    loop {
+      let frames_in = self.resampler.input_frames_next();
+      let chunk = frames_in * ch;
+      if self.pending.len() - consumed < chunk {
+        break;
+      }
+
+      let input = InterleavedSlice::new(&self.pending[consumed..consumed + chunk], ch, frames_in)?;
+      let start = self.output.len();
+      let frames_max = self.resampler.output_frames_max();
+      self.output.resize(start + frames_max * ch, 0.0);
+      let mut out = InterleavedSlice::new_mut(&mut self.output[start..], ch, frames_max)?;
+      let (_, written) = self.resampler.process_into_buffer(&input, &mut out, None)?;
+      self.output.truncate(start + written * ch);
+      consumed += chunk;
+    }
+    self.pending.drain(..consumed);
+
+    Ok(&self.output)
+  }
 }
 
 pub trait AudioOutput {
@@ -264,10 +328,24 @@ fn try_open(spec: &AudioSpec) -> Result<Box<dyn AudioOutput>> {
     }
   };
 
+  // Use the file's rate if the device supports it, otherwise fall back to the device's default.
+  let channels = spec.channels().count() as cpal::ChannelCount;
+  let rate_supported = device
+    .supported_output_configs()
+    .map(|mut configs| {
+      configs.any(|c| {
+        c.channels() == channels
+          && c.min_sample_rate() <= spec.rate()
+          && spec.rate() <= c.max_sample_rate()
+      })
+    })
+    .unwrap_or(false);
+  let output_rate = if rate_supported { spec.rate() } else { config.sample_rate() };
+
   match config.sample_format() {
-    cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, &device),
-    cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, &device),
-    cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, &device),
+    cpal::SampleFormat::F32 => CpalAudioOutputImpl::<f32>::try_open(spec, output_rate, &device),
+    cpal::SampleFormat::I16 => CpalAudioOutputImpl::<i16>::try_open(spec, output_rate, &device),
+    cpal::SampleFormat::U16 => CpalAudioOutputImpl::<u16>::try_open(spec, output_rate, &device),
     _ => unreachable!(), // We shouldn't reach here... right?
   }
 }
@@ -275,6 +353,7 @@ fn try_open(spec: &AudioSpec) -> Result<Box<dyn AudioOutput>> {
 impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
   pub fn try_open(
     spec: &AudioSpec,
+    output_rate: u32,
     device: &cpal::Device,
   ) -> Result<Box<dyn AudioOutput>> {
     let channels = spec.channels().count();
@@ -282,11 +361,16 @@ impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
     let sample_buf = Vec::new();
     let config = StreamConfig {
       channels: channels as cpal::ChannelCount,
-      sample_rate: spec.rate(),
+      sample_rate: output_rate,
       buffer_size: BufferSize::Default,
     };
 
-    let ring_len = ((200 * spec.rate() as usize) / 1000) * channels;
+    let rate_converter = match output_rate == spec.rate() {
+      true => None,
+      false => Some(RateConverter::new(spec.rate(), output_rate, channels)?),
+    };
+
+    let ring_len = ((200 * output_rate as usize) / 1000) * channels;
     let ring_buf = SpscRb::new(ring_len);
     let (ring_buf_tx, ring_buf_rx) = (ring_buf.producer(), ring_buf.consumer());
 
@@ -306,6 +390,7 @@ impl<T: AudioOutputSample + cpal::SizedSample> CpalAudioOutputImpl<T> {
       ring_buf_tx,
       sample_buf,
       stream,
+      rate_converter,
     }))
   }
 }
@@ -318,8 +403,15 @@ impl<T: AudioOutputSample> AudioOutput for CpalAudioOutputImpl<T> {
     }
 
     // Audio samples must be interleaved for cpal. Interleave the samples in the audio
-    // buffer into the sample buffer.
-    decoded.copy_to_vec_interleaved(&mut self.sample_buf);
+    // buffer into the sample buffer, resampling first if needed.
+    match &mut self.rate_converter {
+      Some(converter) => {
+        let resampled = converter.process(&decoded)?;
+        self.sample_buf.clear();
+        self.sample_buf.extend(resampled.iter().map(|&s| <T as cpal::Sample>::from_sample(s)));
+      }
+      None => decoded.copy_to_vec_interleaved(&mut self.sample_buf),
+    }
 
     // Write all the interleaved samples to the ring buffer.
     let mut samples = &self.sample_buf[..];
