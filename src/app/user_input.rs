@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
 use super::*;
-use tui::{
+use ratatui::{
   layout::Rect,
   style::{Color, Style},
-  terminal::Frame,
+  Frame,
   widgets::{Block, Borders, Paragraph},
 };
 
-pub fn render<'a, B: Backend>(state: &'a mut App, area: Rect, frame: &mut Frame<B>) {
-  let paragraph = Paragraph::new(state.input.as_ref()).block(
+pub fn render<'a>(state: &'a mut App, area: Rect, frame: &mut Frame) {
+  let paragraph = Paragraph::new(state.input.as_str()).block(
     Block::default()
       .borders(Borders::ALL)
       .border_style(Style::default().fg(Color::Blue))

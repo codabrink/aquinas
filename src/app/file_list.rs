@@ -1,18 +1,18 @@
 use super::*;
 use crossterm::event::KeyCode;
-use tui::layout::Rect;
-use tui::widgets::List;
-use tui::{
+use ratatui::layout::Rect;
+use ratatui::widgets::List;
+use ratatui::{
   style::{Color, Modifier, Style},
-  terminal::Frame,
-  text::{Span, Spans},
+  Frame,
+  text::{Line, Span},
   widgets::{Block, Borders, ListItem, ListState},
 };
 
-pub fn render_file_list<'a, B: Backend>(
+pub fn render_file_list<'a>(
   state: &'a mut App,
   area: Rect,
-  frame: &mut Frame<B>,
+  frame: &mut Frame,
   list_state: &mut ListState,
 ) {
   let list_items: Vec<ListItem> = state
@@ -52,7 +52,7 @@ pub fn render_file_list<'a, B: Backend>(
 
 fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListItem<'a> {
   ListItem::new(match (node.is_dir(), state.backend.last_played()) {
-    (true, _) => Spans::from(vec![
+    (true, _) => Line::from(vec![
       Span::from(" ".repeat(depth * 2)),
       Span::from(match state.library.open_dirs.contains(&node.path) {
         true => "▼ ",
@@ -65,13 +65,13 @@ fn render_list_item<'a>(state: &'a App, node: &'a Node, depth: usize) -> ListIte
           .add_modifier(Modifier::BOLD),
       ),
     ]),
-    (false, Some(lp)) if *lp == node.path => Spans::from(vec![Span::styled(
+    (false, Some(lp)) if *lp == node.path => Line::from(vec![Span::styled(
       format!("{}{}", " ".repeat(depth * 2), node.title()),
       Style::default().bg(Color::White).fg(Color::Black),
     )]),
-    _ => Spans::from(vec![
+    _ => Line::from(vec![
       Span::from(" ".repeat(depth * 2)),
-      Span::from(node.title().as_ref()),
+      Span::from(node.title()),
     ]),
   })
 }

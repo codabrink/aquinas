@@ -17,8 +17,8 @@ impl super::Backend for GStreamer {
     gst::init().expect("Could not initialize GStreamer.");
     let dispatcher = gst_player::PlayerGMainContextSignalDispatcher::new(None);
     let player = gst_player::Player::new(
-      None,
-      Some(&dispatcher.upcast::<gst_player::PlayerSignalDispatcher>()),
+      None::<gst_player::PlayerVideoRenderer>,
+      Some(dispatcher.upcast::<gst_player::PlayerSignalDispatcher>()),
     );
 
     Self {
